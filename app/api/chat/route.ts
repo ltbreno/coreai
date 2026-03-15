@@ -16,15 +16,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Forward the request to the external API
-    const apiUrl = process.env.COREAI_API_URL
-    
-    if (!apiUrl) {
-      // No API configured, return mock response
-      return NextResponse.json({
-        response: generateMockResponse(chat_input, metadata?.pdf_base64),
-        follow_ups: generateFollowUps(chat_input),
-      })
-    }
+    const apiUrl = "https://core-ai-production-c3aa.up.railway.app/api/v1/chat"
     
     const response = await fetch(apiUrl, {
       method: "POST",
