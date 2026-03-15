@@ -1,12 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
+  let body: { chat_input: string; metadata?: { pdf_base64?: string }; session_id: string; user_id: string }
+  
   try {
-    const body = await request.json()
-    const { chat_input, metadata, session_id, user_id } = body
+    body = await request.json()
+  } catch {
+    return NextResponse.json({
+      response: generateMockResponse("", undefined),
+      follow_ups: generateFollowUps(""),
+    })
+  }
+  
+  const { chat_input, metadata, session_id, user_id } = body
 
+  try {
     // Forward the request to the external API
-    const apiUrl = process.env.COREAI_API_URL || "https://api.coreai.example.com/chat"
+    const apiUrl = process.env.COREAI_API_URL
+    
+    if (!apiUrl) {
+      // No API configured, return mock response
+      return NextResponse.json({
+        response: generateMockResponse(chat_input, metadata?.pdf_base64),
+        follow_ups: generateFollowUps(chat_input),
+      })
+    }
     
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -34,12 +52,11 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json()
     return NextResponse.json(data)
-  } catch (error) {
+  } catch {
     // Return mock response for demo when API is unavailable
-    const body = await request.clone().json().catch(() => ({ chat_input: "" }))
     return NextResponse.json({
-      response: generateMockResponse(body.chat_input, body.metadata?.pdf_base64),
-      follow_ups: generateFollowUps(body.chat_input),
+      response: generateMockResponse(chat_input, metadata?.pdf_base64),
+      follow_ups: generateFollowUps(chat_input),
     })
   }
 }
