@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { ArrowRight } from "lucide-react"
+import Link from "next/link"
 
 export function CTA() {
   return (
@@ -40,9 +41,12 @@ export function CTA() {
                 size="lg"
                 variant="secondary"
                 className="font-medium gap-2"
+                asChild
               >
-                Começar agora
-                <ArrowRight className="h-4 w-4" />
+                <Link href="/chat">
+                  Comecar agora
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </Button>
             </div>
           </div>

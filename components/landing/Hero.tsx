@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { ChatPreview } from "./ChatPreview"
 import { ArrowRight, Play } from "lucide-react"
+import Link from "next/link"
 
 export function Hero() {
   return (
@@ -34,9 +35,11 @@ export function Hero() {
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
-              <Button size="lg" className="font-medium w-full sm:w-auto gap-2">
-                Testar agora
-                <ArrowRight className="h-4 w-4" />
+              <Button size="lg" className="font-medium w-full sm:w-auto gap-2" asChild>
+                <Link href="/chat">
+                  Comece agora
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </Button>
               <Button
                 variant="outline"
@@ -44,7 +47,7 @@ export function Hero() {
                 className="font-medium w-full sm:w-auto gap-2"
               >
                 <Play className="h-4 w-4" />
-                Ver demonstração
+                Ver demonstracao
               </Button>
             </div>
 
