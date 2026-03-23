@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 
+interface ChatRequestBody {
+  chat_input: string
+  metadata: Record<string, unknown>
+  session_id: string
+  user_id: string
+  pdf_base64?: string
+  idade?: number
+  sexo?: "M" | "F"
+  alergias?: string[]
+  remedios?: string[]
+}
+
 export async function POST(request: NextRequest) {
-  let body: { chat_input: string; metadata?: { pdf_base64?: string }; session_id: string; user_id: string }
+  let body: ChatRequestBody
   
   try {
     body = await request.json()
@@ -12,11 +24,28 @@ export async function POST(request: NextRequest) {
     })
   }
   
-  const { chat_input, metadata, session_id, user_id } = body
+  const { chat_input, metadata, session_id, user_id, pdf_base64, idade, sexo, alergias, remedios } = body
 
   try {
     // Forward the request to the external API
     const apiUrl = "https://core-ai-production-c3aa.up.railway.app/api/v1/chat"
+    
+    // Build payload - include patient data only if PDF is present
+    const payload: Record<string, unknown> = {
+      chat_input,
+      session_id,
+      user_id,
+      metadata,
+    }
+
+    // If PDF is present, add patient data to the payload
+    if (pdf_base64) {
+      payload.pdf_base64 = pdf_base64
+      payload.sexo = sexo
+      payload.idade = idade
+      payload.alergias = alergias || []
+      payload.remedios = remedios || []
+    }
     
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -26,12 +55,7 @@ export async function POST(request: NextRequest) {
           Authorization: `Bearer ${process.env.COREAI_API_KEY}`,
         }),
       },
-      body: JSON.stringify({
-        chat_input,
-        metadata,
-        session_id,
-        user_id,
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {

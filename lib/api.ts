@@ -1,10 +1,14 @@
 export interface ChatMessage {
   chat_input: string
-  metadata: {
-    pdf_base64?: string
-  }
+  metadata: Record<string, unknown>
   session_id: string
   user_id: string
+  // Patient data (required when sending PDF)
+  pdf_base64?: string
+  idade?: number
+  sexo?: "M" | "F"
+  alergias?: string[]
+  remedios?: string[]
 }
 
 export interface ChatResponse {

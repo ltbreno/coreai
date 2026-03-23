@@ -11,6 +11,7 @@ import {
   fileToBase64,
   type ChatResponse 
 } from "@/lib/api"
+import { PatientModal, type PatientData } from "@/components/landing/PatientModal"
 
 interface Message {
   role: "user" | "assistant"
@@ -24,6 +25,9 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [pdfBase64, setPdfBase64] = useState<string | null>(null)
+  const [patientData, setPatientData] = useState<PatientData | null>(null)
+  const [showPatientModal, setShowPatientModal] = useState(false)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [sessionId] = useState(() => generateSessionId())
   const [userId] = useState(() => generateUserId())
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -43,9 +47,20 @@ export default function ChatPage() {
       return
     }
     
-    setPdfFile(file)
-    const base64 = await fileToBase64(file)
+    // Store pending file and open modal for patient data
+    setPendingFile(file)
+    setShowPatientModal(true)
+  }
+
+  const handlePatientDataSubmit = async (data: PatientData) => {
+    if (!pendingFile) return
+    
+    setPatientData(data)
+    setPdfFile(pendingFile)
+    const base64 = await fileToBase64(pendingFile)
     setPdfBase64(base64)
+    setPendingFile(null)
+    setShowPatientModal(false)
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -63,6 +78,7 @@ export default function ChatPage() {
   const removePdf = () => {
     setPdfFile(null)
     setPdfBase64(null)
+    setPatientData(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,11 +93,17 @@ export default function ChatPage() {
     try {
       const response: ChatResponse = await sendChatMessage({
         chat_input: userMessage,
-        metadata: {
-          pdf_base64: pdfBase64 || undefined,
-        },
+        metadata: {},
         session_id: sessionId,
         user_id: userId,
+        // Include patient data and PDF if available
+        ...(pdfBase64 && patientData && {
+          pdf_base64: pdfBase64,
+          idade: patientData.idade,
+          sexo: patientData.sexo,
+          alergias: patientData.alergias,
+          remedios: patientData.remedios,
+        }),
       })
 
       setMessages((prev) => [
@@ -111,6 +133,17 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Patient Data Modal */}
+      <PatientModal
+        open={showPatientModal}
+        onOpenChange={(open) => {
+          setShowPatientModal(open)
+          if (!open) setPendingFile(null)
+        }}
+        onSubmit={handlePatientDataSubmit}
+        fileName={pendingFile?.name || ""}
+      />
+
       {/* Header */}
       <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
