@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     // API requires EITHER chat_input OR pdf_base64, never both
     let payload: Record<string, unknown>
 
-    if (pdf_base64) {
+    if (pdf_base64 && pdf_base64.length > 0) {
       // Send PDF for processing (without chat_input)
       payload = {
         pdf_base64,
@@ -44,17 +44,19 @@ export async function POST(request: NextRequest) {
         alergias: alergias || [],
         remedios: remedios || [],
       }
-    } else {
+    } else if (chat_input && chat_input.trim().length > 0) {
       // Send question (without pdf_base64)
       payload = {
         chat_input,
         session_id,
         user_id,
       }
+    } else {
+      return NextResponse.json({
+        response: "Por favor, envie um PDF ou uma pergunta.",
+        followUpQuestions: [],
+      })
     }
-    
-    console.log("[v0] Sending to API:", apiUrl)
-    console.log("[v0] Payload:", JSON.stringify({ ...payload, pdf_base64: pdf_base64 ? "[BASE64_DATA]" : undefined }, null, 2))
     
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -64,11 +66,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(payload),
     })
 
-    console.log("[v0] API Response status:", response.status)
-
     if (!response.ok) {
-      const errorText = await response.text()
-      console.log("[v0] API Error:", errorText)
       // If the external API fails, return a mock response for demo purposes
       return NextResponse.json({
         response: generateMockResponse(chat_input, pdf_base64),
@@ -77,10 +75,8 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
-    console.log("[v0] API Success data:", JSON.stringify(data, null, 2))
     return NextResponse.json(data)
-  } catch (error) {
-    console.log("[v0] Fetch error:", error)
+  } catch {
     // Return mock response for demo when API is unavailable
     return NextResponse.json({
       response: generateMockResponse(chat_input, pdf_base64),
