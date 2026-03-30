@@ -13,7 +13,8 @@ export interface ChatMessage {
 
 export interface ChatResponse {
   response: string
-  follow_ups?: string[]
+  followUpQuestions?: string[]
+  session_id?: string
 }
 
 export async function sendChatMessage(message: ChatMessage): Promise<ChatResponse> {

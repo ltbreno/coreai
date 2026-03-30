@@ -111,7 +111,7 @@ export default function ChatPage() {
         {
           role: "assistant",
           content: response.response,
-          followUps: response.follow_ups,
+          followUps: response.followUpQuestions,
         },
       ])
     } catch (error) {
