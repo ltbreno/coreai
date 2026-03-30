@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
+    console.log("[v0] API Response:", JSON.stringify(data, null, 2))
     return NextResponse.json(data)
   } catch {
     // Return mock response for demo when API is unavailable
