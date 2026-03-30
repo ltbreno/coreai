@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({
       response: generateMockResponse("", undefined),
-      follow_ups: generateFollowUps(""),
+      followUpQuestions: generateFollowUps(""),
     })
   }
   
@@ -47,32 +47,38 @@ export async function POST(request: NextRequest) {
       payload.remedios = remedios || []
     }
     
+    console.log("[v0] Sending to API:", apiUrl)
+    console.log("[v0] Payload:", JSON.stringify({ ...payload, pdf_base64: pdf_base64 ? "[BASE64_DATA]" : undefined }, null, 2))
+    
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(process.env.COREAI_API_KEY && {
-          Authorization: `Bearer ${process.env.COREAI_API_KEY}`,
-        }),
       },
       body: JSON.stringify(payload),
     })
 
+    console.log("[v0] API Response status:", response.status)
+
     if (!response.ok) {
+      const errorText = await response.text()
+      console.log("[v0] API Error:", errorText)
       // If the external API fails, return a mock response for demo purposes
       return NextResponse.json({
-        response: generateMockResponse(chat_input, metadata?.pdf_base64),
-        follow_ups: generateFollowUps(chat_input),
+        response: generateMockResponse(chat_input, pdf_base64),
+        followUpQuestions: generateFollowUps(chat_input),
       })
     }
 
     const data = await response.json()
+    console.log("[v0] API Success data:", JSON.stringify(data, null, 2))
     return NextResponse.json(data)
-  } catch {
+  } catch (error) {
+    console.log("[v0] Fetch error:", error)
     // Return mock response for demo when API is unavailable
     return NextResponse.json({
-      response: generateMockResponse(chat_input, metadata?.pdf_base64),
-      follow_ups: generateFollowUps(chat_input),
+      response: generateMockResponse(chat_input, pdf_base64),
+      followUpQuestions: generateFollowUps(chat_input),
     })
   }
 }
