@@ -19,6 +19,55 @@ interface Message {
   followUps?: string[]
 }
 
+// Format markdown text to clean HTML
+function formatResponse(text: string): React.ReactNode {
+  // Remove source references like [1], [2], etc.
+  let cleaned = text.replace(/\[\d+\]/g, "")
+  
+  // Remove excessive asterisks for bold/italic
+  cleaned = cleaned.replace(/\*\*\*/g, "")
+  cleaned = cleaned.replace(/\*\*/g, "")
+  cleaned = cleaned.replace(/\*/g, "")
+  
+  // Remove hash symbols for headers but keep the text
+  cleaned = cleaned.replace(/^#{1,6}\s*/gm, "")
+  
+  // Clean up excessive whitespace
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n")
+  
+  // Split into paragraphs
+  const paragraphs = cleaned.split(/\n\n+/)
+  
+  return (
+    <div className="space-y-3">
+      {paragraphs.map((paragraph, idx) => {
+        const trimmed = paragraph.trim()
+        if (!trimmed) return null
+        
+        // Check if it's a list item
+        if (trimmed.startsWith("- ") || trimmed.startsWith("• ") || /^\d+\.\s/.test(trimmed)) {
+          const items = trimmed.split("\n").filter(item => item.trim())
+          return (
+            <ul key={idx} className="space-y-1.5 pl-4">
+              {items.map((item, itemIdx) => (
+                <li key={itemIdx} className="text-sm leading-relaxed">
+                  {item.replace(/^[-•]\s*/, "").replace(/^\d+\.\s*/, "")}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        
+        return (
+          <p key={idx} className="text-sm leading-relaxed">
+            {trimmed}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -273,13 +322,17 @@ export default function ChatPage() {
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground"
+                        : "bg-muted/70 text-foreground"
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-line">{message.content}</p>
+                    {message.role === "user" ? (
+                      <p className="text-sm">{message.content}</p>
+                    ) : (
+                      formatResponse(message.content)
+                    )}
                   </div>
                 </div>
               ))}
