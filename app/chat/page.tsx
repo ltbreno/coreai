@@ -24,7 +24,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [pdfBase64, setPdfBase64] = useState<string | null>(null)
+  const [pdfProcessed, setPdfProcessed] = useState(false)
   const [patientData, setPatientData] = useState<PatientData | null>(null)
   const [showPatientModal, setShowPatientModal] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
@@ -57,10 +57,44 @@ export default function ChatPage() {
     
     setPatientData(data)
     setPdfFile(pendingFile)
-    const base64 = await fileToBase64(pendingFile)
-    setPdfBase64(base64)
-    setPendingFile(null)
     setShowPatientModal(false)
+    setIsLoading(true)
+
+    try {
+      // Send PDF to API for processing
+      const base64 = await fileToBase64(pendingFile)
+      
+      const response: ChatResponse = await sendChatMessage({
+        chat_input: "",
+        metadata: {},
+        session_id: sessionId,
+        user_id: userId,
+        pdf_base64: base64,
+        idade: data.idade,
+        sexo: data.sexo,
+        alergias: data.alergias,
+        remedios: data.remedios,
+      })
+
+      setPdfProcessed(true)
+      setMessages([
+        {
+          role: "assistant",
+          content: response.response,
+          followUps: response.followUpQuestions,
+        },
+      ])
+    } catch (error) {
+      setMessages([
+        {
+          role: "assistant",
+          content: "Desculpe, ocorreu um erro ao processar o documento. Tente novamente.",
+        },
+      ])
+    } finally {
+      setPendingFile(null)
+      setIsLoading(false)
+    }
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -77,8 +111,9 @@ export default function ChatPage() {
 
   const removePdf = () => {
     setPdfFile(null)
-    setPdfBase64(null)
+    setPdfProcessed(false)
     setPatientData(null)
+    setMessages([])
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,19 +126,12 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
+      // Send only chat_input (PDF was already processed separately)
       const response: ChatResponse = await sendChatMessage({
         chat_input: userMessage,
         metadata: {},
         session_id: sessionId,
         user_id: userId,
-        // Include patient data and PDF if available
-        ...(pdfBase64 && patientData && {
-          pdf_base64: pdfBase64,
-          idade: patientData.idade,
-          sexo: patientData.sexo,
-          alergias: patientData.alergias,
-          remedios: patientData.remedios,
-        }),
       })
 
       setMessages((prev) => [
@@ -189,73 +217,53 @@ export default function ChatPage() {
           onDrop={handleDrop}
           onDragOver={handleDragOver}
         >
-          {messages.length === 0 ? (
+          {messages.length === 0 && !isLoading ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[500px] text-center">
-              {!pdfFile ? (
-                <label
-                  htmlFor="pdf-upload"
-                  className="cursor-pointer group"
-                >
-                  <div className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-border rounded-2xl hover:border-primary/50 hover:bg-muted/50 transition-colors">
-                    <div className="p-6 bg-muted rounded-full group-hover:bg-primary/10 transition-colors">
-                      <Upload className="h-10 w-10 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-medium text-foreground">
-                        Arraste um PDF ou clique para fazer upload
-                      </p>
-                      <p className="text-muted-foreground mt-2">
-                        Artigos cientificos, exames, estudos clinicos
-                      </p>
-                    </div>
-                  </div>
-                  <input
-                    id="pdf-upload"
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) handleFileUpload(file)
-                    }}
-                  />
-                </label>
-              ) : (
-                <div className="flex flex-col items-center gap-6">
-                  <div className="p-6 bg-primary/10 rounded-full">
-                    <FileText className="h-10 w-10 text-primary" />
+              <label
+                htmlFor="pdf-upload"
+                className="cursor-pointer group"
+              >
+                <div className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-border rounded-2xl hover:border-primary/50 hover:bg-muted/50 transition-colors">
+                  <div className="p-6 bg-muted rounded-full group-hover:bg-primary/10 transition-colors">
+                    <Upload className="h-10 w-10 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
                   <div>
                     <p className="text-lg font-medium text-foreground">
-                      Documento carregado com sucesso!
+                      Arraste um PDF ou clique para fazer upload
                     </p>
                     <p className="text-muted-foreground mt-2">
-                      Faca sua primeira pergunta abaixo.
+                      Artigos cientificos, exames, estudos clinicos
                     </p>
                   </div>
-                  <div className="flex flex-wrap justify-center gap-2 mt-4">
-                    <button
-                      onClick={() => setInput("Qual e o resumo deste documento?")}
-                      className="text-sm px-4 py-2 rounded-full border border-border bg-background hover:bg-muted transition-colors text-foreground"
-                    >
-                      Qual e o resumo?
-                    </button>
-                    <button
-                      onClick={() => setInput("Quais sao as principais conclusoes?")}
-                      className="text-sm px-4 py-2 rounded-full border border-border bg-background hover:bg-muted transition-colors text-foreground"
-                    >
-                      Principais conclusoes
-                    </button>
-                    <button
-                      onClick={() => setInput("Explique a metodologia utilizada")}
-                      className="text-sm px-4 py-2 rounded-full border border-border bg-background hover:bg-muted transition-colors text-foreground"
-                    >
-                      Metodologia
-                    </button>
-                  </div>
                 </div>
-              )}
+                <input
+                  id="pdf-upload"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFileUpload(file)
+                  }}
+                />
+              </label>
+            </div>
+          ) : messages.length === 0 && isLoading ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[500px] text-center">
+              <div className="flex flex-col items-center gap-6">
+                <div className="p-6 bg-primary/10 rounded-full">
+                  <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-foreground">
+                    Processando documento...
+                  </p>
+                  <p className="text-muted-foreground mt-2">
+                    Analisando o PDF e extraindo informacoes relevantes.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : (
             <>

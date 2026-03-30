@@ -30,21 +30,27 @@ export async function POST(request: NextRequest) {
     // Forward the request to the external API
     const apiUrl = "https://core-ai-production-c3aa.up.railway.app/api/v1/chat"
     
-    // Build payload - include patient data only if PDF is present
-    const payload: Record<string, unknown> = {
-      chat_input,
-      session_id,
-      user_id,
-      metadata,
-    }
+    // API requires EITHER chat_input OR pdf_base64, never both
+    let payload: Record<string, unknown>
 
-    // If PDF is present, add patient data to the payload
     if (pdf_base64) {
-      payload.pdf_base64 = pdf_base64
-      payload.sexo = sexo
-      payload.idade = idade
-      payload.alergias = alergias || []
-      payload.remedios = remedios || []
+      // Send PDF for processing (without chat_input)
+      payload = {
+        pdf_base64,
+        session_id,
+        user_id,
+        sexo,
+        idade,
+        alergias: alergias || [],
+        remedios: remedios || [],
+      }
+    } else {
+      // Send question (without pdf_base64)
+      payload = {
+        chat_input,
+        session_id,
+        user_id,
+      }
     }
     
     console.log("[v0] Sending to API:", apiUrl)
