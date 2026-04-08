@@ -88,33 +88,35 @@ export function PatientModal({ open, onOpenChange, onSubmit, fileName }: Patient
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Dados do Paciente</DialogTitle>
-          <DialogDescription>
-            Para analisar o documento <span className="font-medium">{fileName}</span>, precisamos de algumas informacoes do paciente.
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="text-lg">Dados do Paciente</DialogTitle>
+          <DialogDescription className="text-sm">
+            Precisamos de algumas informacoes para analisar o documento.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="flex-1 overflow-y-auto space-y-4 py-4 -mx-4 px-4 sm:-mx-6 sm:px-6">
           {/* Idade e Sexo */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="idade">Idade *</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="idade" className="text-sm">Idade *</Label>
               <Input
                 id="idade"
                 type="number"
+                inputMode="numeric"
                 min="0"
                 max="150"
-                placeholder="Ex: 35"
+                placeholder="35"
                 value={idade}
                 onChange={(e) => setIdade(e.target.value)}
+                className="h-10"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="sexo">Sexo *</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="sexo" className="text-sm">Sexo *</Label>
               <Select value={sexo} onValueChange={(value) => setSexo(value as "M" | "F")}>
-                <SelectTrigger id="sexo">
+                <SelectTrigger id="sexo" className="h-10">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
@@ -126,11 +128,11 @@ export function PatientModal({ open, onOpenChange, onSubmit, fileName }: Patient
           </div>
 
           {/* Alergias */}
-          <div className="space-y-2">
-            <Label>Alergias</Label>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Alergias (opcional)</Label>
             <div className="flex gap-2">
               <Input
-                placeholder="Ex: Lactose, Gluten, Penicilina"
+                placeholder="Ex: Penicilina"
                 value={novaAlergia}
                 onChange={(e) => setNovaAlergia(e.target.value)}
                 onKeyDown={(e) => {
@@ -139,17 +141,18 @@ export function PatientModal({ open, onOpenChange, onSubmit, fileName }: Patient
                     handleAddAlergia()
                   }
                 }}
+                className="h-10"
               />
-              <Button type="button" variant="outline" size="icon" onClick={handleAddAlergia}>
+              <Button type="button" variant="outline" size="icon" onClick={handleAddAlergia} className="h-10 w-10 flex-shrink-0">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
             {alergias.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {alergias.map((alergia) => (
                   <span
                     key={alergia}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-sm"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs"
                   >
                     {alergia}
                     <button
@@ -166,11 +169,11 @@ export function PatientModal({ open, onOpenChange, onSubmit, fileName }: Patient
           </div>
 
           {/* Remedios */}
-          <div className="space-y-2">
-            <Label>Medicamentos em uso</Label>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Medicamentos em uso (opcional)</Label>
             <div className="flex gap-2">
               <Input
-                placeholder="Ex: Omeprazol 20mg, Losartana 50mg"
+                placeholder="Ex: Omeprazol 20mg"
                 value={novoRemedio}
                 onChange={(e) => setNovoRemedio(e.target.value)}
                 onKeyDown={(e) => {
@@ -179,17 +182,18 @@ export function PatientModal({ open, onOpenChange, onSubmit, fileName }: Patient
                     handleAddRemedio()
                   }
                 }}
+                className="h-10"
               />
-              <Button type="button" variant="outline" size="icon" onClick={handleAddRemedio}>
+              <Button type="button" variant="outline" size="icon" onClick={handleAddRemedio} className="h-10 w-10 flex-shrink-0">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
             {remedios.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {remedios.map((remedio) => (
                   <span
                     key={remedio}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-sm"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs"
                   >
                     {remedio}
                     <button
@@ -206,12 +210,12 @@ export function PatientModal({ open, onOpenChange, onSubmit, fileName }: Patient
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="flex-shrink-0 flex-col sm:flex-row gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto order-2 sm:order-1">
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!isValid}>
-            Confirmar e Enviar
+          <Button onClick={handleSubmit} disabled={!isValid} className="w-full sm:w-auto order-1 sm:order-2">
+            Enviar
           </Button>
         </DialogFooter>
       </DialogContent>
