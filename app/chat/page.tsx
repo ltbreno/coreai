@@ -19,53 +19,94 @@ interface Message {
   followUps?: string[]
 }
 
-// Format markdown text to clean HTML
+// Render inline text with bold/italic support
+function renderInlineMarkdown(text: string): React.ReactNode {
+  // Split by bold markers **text**
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+    }
+    return <span key={i}>{part}</span>
+  })
+}
+
+// Format markdown text to structured HTML
 function formatResponse(text: string): React.ReactNode {
   // Remove source references like [1], [2], etc.
-  let cleaned = text.replace(/\[\d+\]/g, "")
-  
-  // Remove excessive asterisks for bold/italic
-  cleaned = cleaned.replace(/\*\*\*/g, "")
-  cleaned = cleaned.replace(/\*\*/g, "")
-  cleaned = cleaned.replace(/\*/g, "")
-  
-  // Remove hash symbols for headers but keep the text
-  cleaned = cleaned.replace(/^#{1,6}\s*/gm, "")
-  
-  // Clean up excessive whitespace
-  cleaned = cleaned.replace(/\n{3,}/g, "\n\n")
-  
-  // Split into paragraphs
-  const paragraphs = cleaned.split(/\n\n+/)
-  
-  return (
-    <div className="space-y-3">
-      {paragraphs.map((paragraph, idx) => {
-        const trimmed = paragraph.trim()
-        if (!trimmed) return null
-        
-        // Check if it's a list item
-        if (trimmed.startsWith("- ") || trimmed.startsWith("• ") || /^\d+\.\s/.test(trimmed)) {
-          const items = trimmed.split("\n").filter(item => item.trim())
-          return (
-            <ul key={idx} className="space-y-1.5 pl-4">
-              {items.map((item, itemIdx) => (
-                <li key={itemIdx} className="text-sm leading-relaxed">
-                  {item.replace(/^[-•]\s*/, "").replace(/^\d+\.\s*/, "")}
-                </li>
-              ))}
-            </ul>
-          )
-        }
-        
-        return (
-          <p key={idx} className="text-sm leading-relaxed">
-            {trimmed}
-          </p>
-        )
-      })}
-    </div>
-  )
+  const cleaned = text
+    .replace(/\[\d+\]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+
+  // Split into lines to process line-by-line
+  const lines = cleaned.split("\n")
+
+  const elements: React.ReactNode[] = []
+  let listItems: string[] = []
+  let listKey = 0
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`list-${listKey++}`} className="space-y-1.5 pl-1">
+          {listItems.map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm leading-relaxed">
+              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary/60 shrink-0" />
+              <span>{renderInlineMarkdown(item)}</span>
+            </li>
+          ))}
+        </ul>
+      )
+      listItems = []
+    }
+  }
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      flushList()
+      return
+    }
+
+    // Heading: # ## ###
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/)
+    if (headingMatch) {
+      flushList()
+      const level = headingMatch[1].length
+      const headingText = headingMatch[2]
+      const sizeClass = level === 1
+        ? "text-base font-bold text-foreground mt-4 mb-1 border-b border-border pb-1"
+        : level === 2
+        ? "text-sm font-bold text-foreground mt-3 mb-0.5 uppercase tracking-wide text-primary"
+        : "text-sm font-semibold text-foreground mt-2"
+      elements.push(
+        <p key={`h-${idx}`} className={sizeClass}>
+          {renderInlineMarkdown(headingText)}
+        </p>
+      )
+      return
+    }
+
+    // List item: - item  or  * item  or  • item  or  1. item
+    const listMatch = trimmed.match(/^[-*•]\s+(.+)/) || trimmed.match(/^\d+\.\s+(.+)/)
+    if (listMatch) {
+      listItems.push(listMatch[1])
+      return
+    }
+
+    // Regular paragraph
+    flushList()
+    elements.push(
+      <p key={`p-${idx}`} className="text-sm leading-relaxed">
+        {renderInlineMarkdown(trimmed)}
+      </p>
+    )
+  })
+
+  flushList()
+
+  return <div className="space-y-2">{elements}</div>
 }
 
 export default function ChatPage() {
