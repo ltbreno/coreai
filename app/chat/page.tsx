@@ -124,6 +124,7 @@ export default function ChatPage() {
   const [showPatientSelect, setShowPatientSelect] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const sessionCreationRef = useRef<Promise<string | null> | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -133,30 +134,41 @@ export default function ChatPage() {
     scrollToBottom()
   }, [messages])
 
-  // Create a DB session and load patients when authenticated
+  // Load patients when authenticated
   useEffect(() => {
     if (!authSession) return
-
     fetch("/api/patients")
       .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setPatients(data)
-      })
-      .catch(() => {})
-
-    fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.id) setDbSessionId(data.id)
-      })
+      .then((data) => { if (Array.isArray(data)) setPatients(data) })
       .catch(() => {})
   }, [authSession])
 
-  // Update session with selected patient
+  // Create DB session lazily on first message
+  const getOrCreateDbSession = async (): Promise<string | null> => {
+    if (dbSessionId) return dbSessionId
+    if (!authSession) return null
+
+    if (!sessionCreationRef.current) {
+      sessionCreationRef.current = fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId: selectedPatientId || undefined }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.id) {
+            setDbSessionId(data.id)
+            return data.id as string
+          }
+          return null
+        })
+        .catch(() => null)
+    }
+
+    return sessionCreationRef.current
+  }
+
+  // Update session with selected patient (only if session already exists)
   useEffect(() => {
     if (!dbSessionId || !selectedPatientId) return
     fetch(`/api/sessions/${dbSessionId}`, {
@@ -164,6 +176,11 @@ export default function ChatPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ patientId: selectedPatientId }),
     }).catch(() => {})
+  }, [selectedPatientId, dbSessionId])
+
+  // Reset session creation ref when patient changes (before first message)
+  useEffect(() => {
+    if (!dbSessionId) sessionCreationRef.current = null
   }, [selectedPatientId, dbSessionId])
 
   const handleFileUpload = async (file: File) => {
@@ -184,14 +201,17 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-      const base64 = await fileToBase64(pendingFile)
+      const [base64, sessionId_db] = await Promise.all([
+        fileToBase64(pendingFile),
+        getOrCreateDbSession(),
+      ])
 
       const response: ChatResponse = await sendChatMessage({
         chat_input: "",
         metadata: {},
         session_id: sessionId,
         user_id: userId,
-        dbSessionId: dbSessionId ?? undefined,
+        dbSessionId: sessionId_db ?? undefined,
         pdfFilename: pendingFile.name,
         pdf_base64: base64,
         idade: data.idade,
@@ -248,12 +268,14 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
+      const sessionId_db = await getOrCreateDbSession()
+
       const response: ChatResponse = await sendChatMessage({
         chat_input: userMessage,
         metadata: {},
         session_id: sessionId,
         user_id: userId,
-        dbSessionId: dbSessionId ?? undefined,
+        dbSessionId: sessionId_db ?? undefined,
       })
 
       setMessages((prev) => [
