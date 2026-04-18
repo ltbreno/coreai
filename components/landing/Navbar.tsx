@@ -4,9 +4,11 @@ import { useState } from "react"
 import Link from "next/link"
 import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useSession, signOut } from "next-auth/react"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const { data: session } = useSession()
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
@@ -41,10 +43,31 @@ export function Navbar() {
             </div>
           </div>
 
-          <div className="hidden md:block">
-            <Button size="sm" className="font-medium">
-              Começar agora
-            </Button>
+          <div className="hidden md:flex items-center gap-2">
+            {session ? (
+              <>
+                <Link href="/dashboard">
+                  <Button variant="outline" size="sm">Meu painel</Button>
+                </Link>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={() => signOut({ callbackUrl: "/" })}
+                >
+                  Sair
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="outline" size="sm">Entrar</Button>
+                </Link>
+                <Link href="/registro">
+                  <Button size="sm" className="font-medium">Começar agora</Button>
+                </Link>
+              </>
+            )}
           </div>
 
           <button
@@ -80,9 +103,30 @@ export function Navbar() {
               >
                 Testar
               </Link>
-              <Button size="sm" className="font-medium w-fit">
-                Começar agora
-              </Button>
+              {session ? (
+                <div className="flex flex-col gap-2">
+                  <Link href="/dashboard" onClick={() => setIsOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-fit">Meu painel</Button>
+                  </Link>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-fit text-muted-foreground"
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                  >
+                    Sair
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Link href="/login" onClick={() => setIsOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-fit">Entrar</Button>
+                  </Link>
+                  <Link href="/registro" onClick={() => setIsOpen(false)}>
+                    <Button size="sm" className="font-medium w-fit">Começar agora</Button>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         )}

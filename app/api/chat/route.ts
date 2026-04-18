@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 
 interface ChatRequestBody {
   chat_input: string
   metadata: Record<string, unknown>
   session_id: string
   user_id: string
+  dbSessionId?: string
+  pdfFilename?: string
   pdf_base64?: string
   idade?: number
   sexo?: "M" | "F"
@@ -12,9 +17,44 @@ interface ChatRequestBody {
   remedios?: string[]
 }
 
+async function persistMessages(
+  dbSessionId: string,
+  userId: string,
+  userContent: string,
+  assistantContent: string,
+  followUps: string[]
+) {
+  const chatSession = await prisma.chatSession.findFirst({
+    where: { id: dbSessionId, userId },
+  })
+  if (!chatSession) return
+
+  await prisma.$transaction([
+    prisma.message.create({
+      data: { sessionId: dbSessionId, role: "user", content: userContent, followUps: [] },
+    }),
+    prisma.message.create({
+      data: { sessionId: dbSessionId, role: "assistant", content: assistantContent, followUps },
+    }),
+  ])
+
+  if (!chatSession.title) {
+    const title = userContent.slice(0, 60) + (userContent.length > 60 ? "..." : "")
+    await prisma.chatSession.update({
+      where: { id: dbSessionId },
+      data: { title, updatedAt: new Date() },
+    })
+  } else {
+    await prisma.chatSession.update({
+      where: { id: dbSessionId },
+      data: { updatedAt: new Date() },
+    })
+  }
+}
+
 export async function POST(request: NextRequest) {
   let body: ChatRequestBody
-  
+
   try {
     body = await request.json()
   } catch {
@@ -23,18 +63,25 @@ export async function POST(request: NextRequest) {
       followUpQuestions: generateFollowUps(""),
     })
   }
-  
-  const { chat_input, metadata, session_id, user_id, pdf_base64, idade, sexo, alergias, remedios } = body
+
+  const {
+    chat_input,
+    session_id,
+    user_id,
+    dbSessionId,
+    pdfFilename,
+    pdf_base64,
+    idade,
+    sexo,
+    alergias,
+    remedios,
+  } = body
 
   try {
-    // Forward the request to the external API
     const apiUrl = "https://core-ai-production-c3aa.up.railway.app/api/v1/chat"
-    
-    // API requires EITHER chat_input OR pdf_base64, never both
     let payload: Record<string, unknown>
 
     if (pdf_base64 && pdf_base64.length > 0) {
-      // Send PDF for processing (without chat_input)
       payload = {
         pdf_base64,
         session_id,
@@ -45,39 +92,45 @@ export async function POST(request: NextRequest) {
         remedios: remedios || [],
       }
     } else if (chat_input && chat_input.trim().length > 0) {
-      // Send question (without pdf_base64)
-      payload = {
-        chat_input,
-        session_id,
-        user_id,
-      }
+      payload = { chat_input, session_id, user_id }
     } else {
       return NextResponse.json({
         response: "Por favor, envie um PDF ou uma pergunta.",
         followUpQuestions: [],
       })
     }
-    
+
     const response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
 
-    if (!response.ok) {
-      // If the external API fails, return a mock response for demo purposes
-      return NextResponse.json({
-        response: generateMockResponse(chat_input, pdf_base64),
-        followUpQuestions: generateFollowUps(chat_input),
-      })
+    const data = response.ok
+      ? await response.json()
+      : {
+          response: generateMockResponse(chat_input, pdf_base64),
+          followUpQuestions: generateFollowUps(chat_input),
+        }
+
+    if (dbSessionId) {
+      const authSession = await getServerSession(authOptions)
+      if (authSession) {
+        const userContent = pdf_base64
+          ? `[PDF enviado${pdfFilename ? `: ${pdfFilename}` : ""}]`
+          : chat_input
+        await persistMessages(
+          dbSessionId,
+          authSession.user.id,
+          userContent,
+          data.response ?? "",
+          data.followUpQuestions ?? []
+        ).catch(() => {})
+      }
     }
 
-    const data = await response.json()
     return NextResponse.json(data)
   } catch {
-    // Return mock response for demo when API is unavailable
     return NextResponse.json({
       response: generateMockResponse(chat_input, pdf_base64),
       followUpQuestions: generateFollowUps(chat_input),
@@ -87,7 +140,7 @@ export async function POST(request: NextRequest) {
 
 function generateMockResponse(question: string, hasPdf?: string): string {
   const lowerQuestion = question.toLowerCase()
-  
+
   if (hasPdf) {
     if (lowerQuestion.includes("resumo") || lowerQuestion.includes("resumir")) {
       return `Com base no documento enviado, posso identificar os seguintes pontos principais:
@@ -101,7 +154,7 @@ function generateMockResponse(question: string, hasPdf?: string): string {
 
 **Conclusão:** O documento fornece informações importantes para a prática clínica. Posso detalhar qualquer seção específica se desejar.`
     }
-    
+
     return `Analisando o documento enviado em relação à sua pergunta sobre "${question}":
 
 **Informações Encontradas:**
@@ -151,7 +204,7 @@ A CoreAI é especializada em analisar documentos médicos e fornecer respostas b
 
 function generateFollowUps(question: string): string[] {
   const lowerQuestion = question.toLowerCase()
-  
+
   if (lowerQuestion.includes("vitamina")) {
     return [
       "Qual a dosagem diária recomendada?",
@@ -159,7 +212,7 @@ function generateFollowUps(question: string): string[] {
       "Existem interações medicamentosas?",
     ]
   }
-  
+
   if (lowerQuestion.includes("exame")) {
     return [
       "Como interpretar os valores alterados?",
@@ -167,7 +220,7 @@ function generateFollowUps(question: string): string[] {
       "Quais outros exames complementares?",
     ]
   }
-  
+
   return [
     "Pode detalhar mais sobre este tema?",
     "Quais são as referências científicas?",

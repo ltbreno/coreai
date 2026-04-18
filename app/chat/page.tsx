@@ -1,15 +1,16 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft } from "lucide-react"
+import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft, LayoutDashboard, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { 
-  sendChatMessage, 
-  generateSessionId, 
-  generateUserId, 
+import { useSession } from "next-auth/react"
+import {
+  sendChatMessage,
+  generateSessionId,
+  generateUserId,
   fileToBase64,
-  type ChatResponse 
+  type ChatResponse,
 } from "@/lib/api"
 import { PatientModal, type PatientData } from "@/components/landing/PatientModal"
 
@@ -19,9 +20,12 @@ interface Message {
   followUps?: string[]
 }
 
-// Render inline text with bold/italic support
+interface PatientOption {
+  id: string
+  name: string
+}
+
 function renderInlineMarkdown(text: string): React.ReactNode {
-  // Split by bold markers **text**
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
@@ -31,17 +35,13 @@ function renderInlineMarkdown(text: string): React.ReactNode {
   })
 }
 
-// Format markdown text to structured HTML
 function formatResponse(text: string): React.ReactNode {
-  // Remove source references like [1], [2], etc.
   const cleaned = text
     .replace(/\[\d+\]/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 
-  // Split into lines to process line-by-line
   const lines = cleaned.split("\n")
-
   const elements: React.ReactNode[] = []
   let listItems: string[] = []
   let listKey = 0
@@ -69,17 +69,17 @@ function formatResponse(text: string): React.ReactNode {
       return
     }
 
-    // Heading: # ## ###
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/)
     if (headingMatch) {
       flushList()
       const level = headingMatch[1].length
       const headingText = headingMatch[2]
-      const sizeClass = level === 1
-        ? "text-base font-bold text-foreground mt-4 mb-1 border-b border-border pb-1"
-        : level === 2
-        ? "text-sm font-bold text-foreground mt-3 mb-0.5 uppercase tracking-wide text-primary"
-        : "text-sm font-semibold text-foreground mt-2"
+      const sizeClass =
+        level === 1
+          ? "text-base font-bold text-foreground mt-4 mb-1 border-b border-border pb-1"
+          : level === 2
+          ? "text-sm font-bold text-foreground mt-3 mb-0.5 uppercase tracking-wide text-primary"
+          : "text-sm font-semibold text-foreground mt-2"
       elements.push(
         <p key={`h-${idx}`} className={sizeClass}>
           {renderInlineMarkdown(headingText)}
@@ -88,14 +88,12 @@ function formatResponse(text: string): React.ReactNode {
       return
     }
 
-    // List item: - item  or  * item  or  • item  or  1. item
     const listMatch = trimmed.match(/^[-*•]\s+(.+)/) || trimmed.match(/^\d+\.\s+(.+)/)
     if (listMatch) {
       listItems.push(listMatch[1])
       return
     }
 
-    // Regular paragraph
     flushList()
     elements.push(
       <p key={`p-${idx}`} className="text-sm leading-relaxed">
@@ -105,11 +103,11 @@ function formatResponse(text: string): React.ReactNode {
   })
 
   flushList()
-
   return <div className="space-y-2">{elements}</div>
 }
 
 export default function ChatPage() {
+  const { data: authSession } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -120,6 +118,10 @@ export default function ChatPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [sessionId] = useState(() => generateSessionId())
   const [userId] = useState(() => generateUserId())
+  const [dbSessionId, setDbSessionId] = useState<string | null>(null)
+  const [patients, setPatients] = useState<PatientOption[]>([])
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("")
+  const [showPatientSelect, setShowPatientSelect] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -131,34 +133,66 @@ export default function ChatPage() {
     scrollToBottom()
   }, [messages])
 
+  // Create a DB session and load patients when authenticated
+  useEffect(() => {
+    if (!authSession) return
+
+    fetch("/api/patients")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPatients(data)
+      })
+      .catch(() => {})
+
+    fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.id) setDbSessionId(data.id)
+      })
+      .catch(() => {})
+  }, [authSession])
+
+  // Update session with selected patient
+  useEffect(() => {
+    if (!dbSessionId || !selectedPatientId) return
+    fetch(`/api/sessions/${dbSessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId: selectedPatientId }),
+    }).catch(() => {})
+  }, [selectedPatientId, dbSessionId])
+
   const handleFileUpload = async (file: File) => {
     if (file.type !== "application/pdf") {
       alert("Por favor, envie apenas arquivos PDF.")
       return
     }
-    
-    // Store pending file and open modal for patient data
     setPendingFile(file)
     setShowPatientModal(true)
   }
 
   const handlePatientDataSubmit = async (data: PatientData) => {
     if (!pendingFile) return
-    
+
     setPatientData(data)
     setPdfFile(pendingFile)
     setShowPatientModal(false)
     setIsLoading(true)
 
     try {
-      // Send PDF to API for processing
       const base64 = await fileToBase64(pendingFile)
-      
+
       const response: ChatResponse = await sendChatMessage({
         chat_input: "",
         metadata: {},
         session_id: sessionId,
         user_id: userId,
+        dbSessionId: dbSessionId ?? undefined,
+        pdfFilename: pendingFile.name,
         pdf_base64: base64,
         idade: data.idade,
         sexo: data.sexo,
@@ -174,7 +208,7 @@ export default function ChatPage() {
           followUps: response.followUpQuestions,
         },
       ])
-    } catch (error) {
+    } catch {
       setMessages([
         {
           role: "assistant",
@@ -190,9 +224,7 @@ export default function ChatPage() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     const file = e.dataTransfer.files[0]
-    if (file) {
-      handleFileUpload(file)
-    }
+    if (file) handleFileUpload(file)
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -216,12 +248,12 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-      // Send only chat_input (PDF was already processed separately)
       const response: ChatResponse = await sendChatMessage({
         chat_input: userMessage,
         metadata: {},
         session_id: sessionId,
         user_id: userId,
+        dbSessionId: dbSessionId ?? undefined,
       })
 
       setMessages((prev) => [
@@ -232,7 +264,7 @@ export default function ChatPage() {
           followUps: response.followUpQuestions,
         },
       ])
-    } catch (error) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -249,9 +281,10 @@ export default function ChatPage() {
     setInput(question)
   }
 
+  const selectedPatient = patients.find((p) => p.id === selectedPatientId)
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Patient Data Modal */}
       <PatientModal
         open={showPatientModal}
         onOpenChange={(open) => {
@@ -266,23 +299,71 @@ export default function ChatPage() {
       <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm">Voltar</span>
             </Link>
             <div className="h-4 w-px bg-border" />
             <h1 className="font-semibold text-foreground">CoreAI</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            <span className="text-xs text-muted-foreground">Online</span>
+
+          <div className="flex items-center gap-3">
+            {/* Patient selector */}
+            {authSession && patients.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowPatientSelect((v) => !v)}
+                  className="flex items-center gap-1.5 text-sm border border-border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors"
+                >
+                  <span className="text-muted-foreground">
+                    {selectedPatient ? selectedPatient.name : "Selecionar paciente"}
+                  </span>
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                </button>
+                {showPatientSelect && (
+                  <div className="absolute right-0 top-full mt-1 w-52 bg-background border border-border rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => { setSelectedPatientId(""); setShowPatientSelect(false) }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors text-muted-foreground"
+                    >
+                      Nenhum paciente
+                    </button>
+                    {patients.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setSelectedPatientId(p.id); setShowPatientSelect(false) }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {authSession && (
+              <Link href="/dashboard">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <LayoutDashboard className="h-3.5 w-3.5" />
+                  <span className="text-xs">Painel</span>
+                </Button>
+              </Link>
+            )}
+
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              <span className="text-xs text-muted-foreground">Online</span>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main chat area */}
       <main className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
-        {/* PDF status bar */}
         {pdfFile && (
           <div className="px-4 py-3 border-b border-border bg-muted/30">
             <div className="flex items-center gap-2 text-sm">
@@ -301,18 +382,14 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Messages area */}
-        <div 
+        <div
           className="flex-1 p-4 space-y-4 overflow-y-auto"
           onDrop={handleDrop}
           onDragOver={handleDragOver}
         >
           {messages.length === 0 && !isLoading ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[500px] text-center">
-              <label
-                htmlFor="pdf-upload"
-                className="cursor-pointer group"
-              >
+              <label htmlFor="pdf-upload" className="cursor-pointer group">
                 <div className="flex flex-col items-center gap-4 p-12 border-2 border-dashed border-border rounded-2xl hover:border-primary/50 hover:bg-muted/50 transition-colors">
                   <div className="p-6 bg-muted rounded-full group-hover:bg-primary/10 transition-colors">
                     <Upload className="h-10 w-10 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -346,9 +423,7 @@ export default function ChatPage() {
                   <Loader2 className="h-10 w-10 text-primary animate-spin" />
                 </div>
                 <div>
-                  <p className="text-lg font-medium text-foreground">
-                    Processando documento...
-                  </p>
+                  <p className="text-lg font-medium text-foreground">Processando documento...</p>
                   <p className="text-muted-foreground mt-2">
                     Analisando o PDF e extraindo informacoes relevantes.
                   </p>
@@ -378,14 +453,11 @@ export default function ChatPage() {
                 </div>
               ))}
 
-              {/* Follow-up suggestions */}
               {messages.length > 0 &&
                 messages[messages.length - 1].role === "assistant" &&
                 messages[messages.length - 1].followUps && (
                   <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <p className="text-xs text-muted-foreground font-medium">
-                      Perguntas sugeridas
-                    </p>
+                    <p className="text-xs text-muted-foreground font-medium">Perguntas sugeridas</p>
                     <div className="flex flex-wrap gap-2">
                       {messages[messages.length - 1].followUps?.map((followUp, index) => (
                         <button
@@ -405,9 +477,7 @@ export default function ChatPage() {
                   <div className="bg-muted rounded-2xl px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">
-                        Analisando...
-                      </span>
+                      <span className="text-sm text-muted-foreground">Analisando...</span>
                     </div>
                   </div>
                 </div>
@@ -438,7 +508,11 @@ export default function ChatPage() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={pdfFile ? "Faca uma pergunta sobre o documento..." : "Envie um PDF primeiro ou faca uma pergunta geral..."}
+                placeholder={
+                  pdfFile
+                    ? "Faca uma pergunta sobre o documento..."
+                    : "Envie um PDF primeiro ou faca uma pergunta geral..."
+                }
                 className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
                 disabled={isLoading}
               />
