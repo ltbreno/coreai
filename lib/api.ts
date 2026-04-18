@@ -3,7 +3,8 @@ export interface ChatMessage {
   metadata: Record<string, unknown>
   session_id: string
   user_id: string
-  // Patient data (required when sending PDF)
+  dbSessionId?: string
+  pdfFilename?: string
   pdf_base64?: string
   idade?: number
   sexo?: "M" | "F"

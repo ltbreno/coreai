@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patients     Patient[]
+  chatSessions ChatSession[]
+}
+
+model Patient {
+  id        String   @id @default(cuid())
+  name      String
+  idade     Int
+  sexo      String
+  alergias  String[]
+  remedios  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSessions ChatSession[]
+}
+
+model ChatSession {
+  id                String   @id @default(cuid())
+  title             String?
+  externalSessionId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patientId String?
+  patient   Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  messages  Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  followUps String[]
+  createdAt DateTime @default(now())
+
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
