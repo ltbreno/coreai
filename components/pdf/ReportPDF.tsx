@@ -11,7 +11,7 @@ import {
 } from "@react-pdf/renderer"
 import type { ReportData, StatusType } from "@/types/report"
 
-// ── Palette ────────────────────────────────────────────────────────────────
+// ── Palette ─────────────────────────────────────────────────────────────────
 const C = {
   bg: "#F2EDE7",
   card: "#FFFFFF",
@@ -33,12 +33,11 @@ const STATUS_COLORS: Record<StatusType, { bg: string; text: string }> = {
 }
 
 type Seg = [number, string]
-
 const BAR_SEGS: Record<string, Seg[]> = {
-  Metabolismo:    [[10,"#C8A84A"],[22,"#8AAA6A"],[40,"#5A7A4A"],[18,"#8AAA6A"],[10,"#C84040"]],
-  Inflamação:     [[10,"#5A7A4A"],[28,"#C07060"],[5,"#D0C8C0"],[30,"#C8A84A"],[27,"#D8D0C8"]],
-  Micronutrientes:[[18,"#C8A84A"],[42,"#6A8A5A"],[40,"#D8D0C8"]],
-  Hormonal:       [[8,"#C8A84A"],[10,"#7A9A6A"],[62,"#5A7A4A"],[12,"#C8A84A"],[8,"#D8D0C8"]],
+  Metabolismo:     [[10,"#C8A84A"],[22,"#8AAA6A"],[40,"#5A7A4A"],[18,"#8AAA6A"],[10,"#C84040"]],
+  Inflamação:      [[10,"#5A7A4A"],[28,"#C07060"],[5,"#D0C8C0"],[30,"#C8A84A"],[27,"#D8D0C8"]],
+  Micronutrientes: [[18,"#C8A84A"],[42,"#6A8A5A"],[40,"#D8D0C8"]],
+  Hormonal:        [[8,"#C8A84A"],[10,"#7A9A6A"],[62,"#5A7A4A"],[12,"#C8A84A"],[8,"#D8D0C8"]],
 }
 const DEFAULT_SEGS: Seg[] = [[15,"#C8A84A"],[45,"#6A8A5A"],[25,"#8AAA6A"],[15,"#C84040"]]
 
@@ -49,17 +48,18 @@ function getSegs(name: string): Seg[] {
   return DEFAULT_SEGS
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
+// ── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  page:    { backgroundColor: C.bg, padding: 28, fontFamily: "Helvetica" },
-  card:    { backgroundColor: C.card, borderRadius: 10, padding: "36 44 44", },
-  row:     { flexDirection: "row", alignItems: "center" },
-  between: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  divider: { height: 1, backgroundColor: C.divider, marginVertical: 16 },
-  divider2:{ height: 1, backgroundColor: C.divider2 },
+  page:         { backgroundColor: C.bg, padding: 24, fontFamily: "Helvetica" },
+  card:         { backgroundColor: C.card, borderRadius: 10, padding: "22 34", marginBottom: 10 },
+  row:          { flexDirection: "row", alignItems: "center" },
+  between:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  divider:      { height: 1, backgroundColor: C.divider, marginVertical: 13 },
+  divider2:     { height: 1, backgroundColor: C.divider2 },
+  sectionTitle: { fontSize: 14, fontFamily: "Helvetica-Bold", letterSpacing: 0.4, color: C.text },
 })
 
-// ── Sub-components ─────────────────────────────────────────────────────────
+// ── Sub-components ───────────────────────────────────────────────────────────
 function Badge({ status }: { status: StatusType }) {
   const col = STATUS_COLORS[status] ?? STATUS_COLORS["Baixo risco"]
   return (
@@ -74,13 +74,11 @@ function SegBar({ score, name }: { score: number; name: string }) {
   const pct = Math.min(100, Math.max(0, score))
   return (
     <View style={{ position: "relative", height: 8, marginTop: 5, borderRadius: 4, overflow: "hidden" }}>
-      {/* coloured segments */}
       <View style={{ flexDirection: "row", position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
         {segs.map(([w, c], i) => (
           <View key={i} style={{ width: `${w}%`, backgroundColor: c }} />
         ))}
       </View>
-      {/* indicator dot — rendered as SVG circle so it can overflow */}
       <View style={{
         position: "absolute",
         left: `${pct}%`,
@@ -99,7 +97,7 @@ function SegBar({ score, name }: { score: number; name: string }) {
 function DonutChart({ overall, categories }: { overall: number; categories: { name: string; score: number }[] }) {
   const COLORS = ["#5A7A4A", "#C07060", "#C8A84A", "#8A9A6A"]
   const r = 46; const cx = 60; const cy = 60
-  const total = categories.reduce((s, c) => s + c.score, 0) || 1
+  const total = categories.reduce((acc, c) => acc + c.score, 0) || 1
   let angle = -Math.PI / 2
   const slices = categories.map((cat, i) => {
     const frac = cat.score / total
@@ -109,7 +107,10 @@ function DonutChart({ overall, categories }: { overall: number; categories: { na
     angle += sweep
     const x2 = cx + r * Math.cos(angle)
     const y2 = cy + r * Math.sin(angle)
-    return { d: `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${frac > 0.5 ? 1 : 0} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`, color: COLORS[i % COLORS.length] }
+    return {
+      d: `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${frac > 0.5 ? 1 : 0} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`,
+      color: COLORS[i % COLORS.length],
+    }
   })
   const inner = r * 0.60
 
@@ -119,7 +120,6 @@ function DonutChart({ overall, categories }: { overall: number; categories: { na
         {slices.map((sl, i) => <Path key={i} d={sl.d} fill={sl.color} opacity={0.88} />)}
         <Circle cx={cx} cy={cy} r={inner} fill={C.bg} />
       </Svg>
-      {/* Score text overlaid via absolute positioning */}
       <View style={{
         position: "absolute",
         top: cy - inner, left: cx - inner,
@@ -134,7 +134,7 @@ function DonutChart({ overall, categories }: { overall: number; categories: { na
   )
 }
 
-// ── Document ───────────────────────────────────────────────────────────────
+// ── Document ─────────────────────────────────────────────────────────────────
 export function ReportPDF({ data }: { data: ReportData }) {
   const { patient, nutritionalStatus, coreScore, interpretation } = data
   const today = new Date().toLocaleDateString("pt-BR")
@@ -144,58 +144,58 @@ export function ReportPDF({ data }: { data: ReportData }) {
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <View style={s.card}>
 
-          {/* Logo */}
-          <View style={[s.row, { marginBottom: 18 }]}>
+        {/* ── Header ── keeps logo + title + patient always together */}
+        <View style={s.card} wrap={false}>
+          <View style={[s.row, { marginBottom: 14 }]}>
             <View style={{
-              width: 40, height: 40, borderRadius: 20,
+              width: 38, height: 38, borderRadius: 19,
               backgroundColor: "#7A6E62",
               alignItems: "center", justifyContent: "center", marginRight: 12,
             }}>
               <Text style={{ color: "#F5F0EB", fontSize: 11, fontFamily: "Helvetica-Bold" }}>IA</Text>
             </View>
             <View>
-              <Text style={{ fontSize: 16, fontFamily: "Helvetica-Bold", letterSpacing: 1.5, color: C.text }}>CORE IA</Text>
+              <Text style={{ fontSize: 15, fontFamily: "Helvetica-Bold", letterSpacing: 1.5, color: C.text }}>CORE IA</Text>
               <Text style={{ fontSize: 7, color: C.muted, letterSpacing: 2, marginTop: 2 }}>INTELIGÊNCIA & SAÚDE</Text>
             </View>
           </View>
 
           <View style={s.divider} />
 
-          {/* Title */}
-          <Text style={{ fontSize: 19, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, color: C.text, marginBottom: 14 }}>
+          <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, color: C.text, marginBottom: 12 }}>
             RELATÓRIO CORE AI
           </Text>
 
-          {/* Patient */}
           {patient?.name && (
-            <View style={{ marginBottom: 14 }}>
+            <View>
               <View style={s.between}>
                 <Text style={{ fontSize: 11, color: C.sub }}>
                   Paciente: <Text style={{ fontFamily: "Helvetica-Bold" }}>{patient.name}</Text>
                 </Text>
                 {patient.age && <Text style={{ fontSize: 11, color: C.sub }}>{patient.age} anos</Text>}
               </View>
-              <View style={[s.between, { marginTop: 3 }]}>
-                <Text style={{ fontSize: 10, color: C.muted }}>Data da coleta: <Text style={{ fontFamily: "Helvetica-Bold" }}>{patient.collectionDate ?? today}</Text></Text>
-                <Text style={{ fontSize: 10, color: C.muted }}>Data da coleta: <Text style={{ fontFamily: "Helvetica-Bold" }}>{patient.collectionDate ?? today}</Text></Text>
+              <View style={{ marginTop: 3 }}>
+                <Text style={{ fontSize: 10, color: C.muted }}>
+                  Data: <Text style={{ fontFamily: "Helvetica-Bold" }}>{patient.collectionDate ?? today}</Text>
+                </Text>
               </View>
             </View>
           )}
+        </View>
 
-          <View style={s.divider} />
-
-          {/* Status Nutricional */}
-          <Text style={{ fontSize: 14, fontFamily: "Helvetica-Bold", color: C.text, marginBottom: 14 }}>
-            Status Nutricional
-          </Text>
+        {/* ── Status Nutricional ── each row is atomic, section can flow across pages */}
+        <View style={s.card}>
+          <View style={s.between}>
+            <Text style={s.sectionTitle}>Status Nutricional</Text>
+          </View>
           <View style={s.divider} />
 
           {allItems.map((item, i) => (
-            <View key={i}>
-              <View style={[s.between, { paddingVertical: 10 }]}>
-                <View>
+            // wrap={false} keeps name+value+badge in same page slice
+            <View key={i} wrap={false}>
+              <View style={[s.between, { paddingVertical: 9 }]}>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold", color: C.text }}>{item.name}</Text>
                   {item.value && (
                     <Text style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{item.value} {item.unit}</Text>
@@ -206,21 +206,20 @@ export function ReportPDF({ data }: { data: ReportData }) {
               {i < allItems.length - 1 && <View style={s.divider2} />}
             </View>
           ))}
+        </View>
 
-          <View style={s.divider} />
-
-          {/* CORE SCORE */}
-          <Text style={{ fontSize: 14, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, color: C.text, marginBottom: 14 }}>
-            CORE SCORE
-          </Text>
+        {/* ── CORE SCORE ── */}
+        <View style={s.card}>
+          <Text style={[s.sectionTitle, { letterSpacing: 0.6, marginBottom: 0 }]}>CORE SCORE</Text>
           <View style={s.divider} />
 
           {hasInterp ? (
-            <View style={[s.row, { alignItems: "flex-start", gap: 20 }]}>
-              {/* Scores */}
+            // 3-column layout: keep the whole thing together; if it doesn't fit it moves to next page
+            <View wrap={false} style={[s.row, { alignItems: "flex-start", gap: 18 }]}>
+              {/* Scores list */}
               <View style={{ flex: 1 }}>
                 {coreScore.categories.map((cat, i) => (
-                  <View key={i} style={{ marginBottom: 16 }}>
+                  <View key={i} style={{ marginBottom: 14 }}>
                     <View style={s.between}>
                       <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: C.sub }}>{cat.name}</Text>
                       <Text style={{ fontSize: 11, color: C.sub }}>
@@ -268,9 +267,10 @@ export function ReportPDF({ data }: { data: ReportData }) {
               </View>
             </View>
           ) : (
+            // Simple single-column scores — each bar stays together
             <View>
               {coreScore.categories.map((cat, i) => (
-                <View key={i} style={{ marginBottom: 20 }}>
+                <View key={i} wrap={false} style={{ marginBottom: 18 }}>
                   <View style={[s.between, { marginBottom: 2 }]}>
                     <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold", color: C.sub }}>{cat.name}</Text>
                     <Text style={{ fontSize: 12, color: C.sub }}>
@@ -282,16 +282,16 @@ export function ReportPDF({ data }: { data: ReportData }) {
               ))}
             </View>
           )}
-
-          {/* Footer */}
-          <View style={{ marginTop: 36 }}>
-            <View style={s.divider} />
-            <Text style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>
-              CORE AI é uma ferramenta de apoio ao profissional
-            </Text>
-          </View>
-
         </View>
+
+        {/* ── Footer ── */}
+        <View wrap={false} style={{ marginTop: 4 }}>
+          <View style={s.divider} />
+          <Text style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>
+            CORE AI é uma ferramenta de apoio ao profissional
+          </Text>
+        </View>
+
       </Page>
     </Document>
   )
