@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft, LayoutDashboard, ChevronDown, Download } from "lucide-react"
+import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft, LayoutDashboard, ChevronDown, Download, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
@@ -11,6 +11,7 @@ import {
   generateSessionId,
   generateUserId,
   fileToBase64,
+  ApiError,
   type ChatResponse,
 } from "@/lib/api"
 import { PatientModal, type PatientData } from "@/components/landing/PatientModal"
@@ -128,6 +129,7 @@ function ChatPageInner() {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [reportReady, setReportReady] = useState(false)
+  const [limitReached, setLimitReached] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sessionCreationRef = useRef<Promise<string | null> | null>(null)
@@ -278,13 +280,17 @@ function ChatPageInner() {
           }
         })
         .catch(() => {})
-    } catch {
-      setMessages([
-        {
-          role: "assistant",
-          content: "Desculpe, ocorreu um erro ao processar o documento. Tente novamente.",
-        },
-      ])
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setLimitReached(err.message)
+      } else {
+        setMessages([
+          {
+            role: "assistant",
+            content: "Desculpe, ocorreu um erro ao processar o documento. Tente novamente.",
+          },
+        ])
+      }
     } finally {
       setPendingFile(null)
       setIsLoading(false)
@@ -338,14 +344,18 @@ function ChatPageInner() {
           followUps: response.followUpQuestions,
         },
       ])
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.",
-        },
-      ])
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setLimitReached(err.message)
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.",
+          },
+        ])
+      }
     } finally {
       setIsLoading(false)
     }
@@ -628,50 +638,64 @@ function ChatPageInner() {
 
         {/* Input area */}
         <div className="border-t border-border bg-background sticky bottom-0">
-          <form onSubmit={handleSubmit} className="p-4">
-            <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-xl px-4 py-3">
-              <label htmlFor="pdf-upload-input" className="cursor-pointer">
-                <Paperclip className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
-                <input
-                  id="pdf-upload-input"
-                  type="file"
-                  accept=".pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleFileUpload(file)
-                  }}
-                />
-              </label>
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={
-                  pdfFile
-                    ? "Faca uma pergunta sobre o documento..."
-                    : "Envie um PDF primeiro ou faca uma pergunta geral..."
-                }
-                className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
-                disabled={isLoading}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                className="h-9 w-9 rounded-lg shrink-0"
-                disabled={!input.trim() || isLoading}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
+          {limitReached ? (
+            <div className="p-4">
+              <div className="flex items-center gap-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/50 rounded-xl px-4 py-3">
+                <AlertCircle className="h-5 w-5 text-orange-500 shrink-0" />
+                <p className="text-sm text-orange-700 dark:text-orange-300 flex-1">{limitReached}</p>
+                <Link href="/registro">
+                  <Button size="sm" className="shrink-0 whitespace-nowrap">
+                    Fazer upgrade
+                  </Button>
+                </Link>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              CoreAI pode cometer erros. Verifique informacoes importantes.
-            </p>
-          </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="p-4">
+              <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-xl px-4 py-3">
+                <label htmlFor="pdf-upload-input" className="cursor-pointer">
+                  <Paperclip className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                  <input
+                    id="pdf-upload-input"
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleFileUpload(file)
+                    }}
+                  />
+                </label>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={
+                    pdfFile
+                      ? "Faca uma pergunta sobre o documento..."
+                      : "Envie um PDF primeiro ou faca uma pergunta geral..."
+                  }
+                  className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
+                  disabled={isLoading}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg shrink-0"
+                  disabled={!input.trim() || isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                CoreAI pode cometer erros. Verifique informacoes importantes.
+              </p>
+            </form>
+          )}
         </div>
       </main>
     </div>

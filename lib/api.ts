@@ -18,6 +18,13 @@ export interface ChatResponse {
   session_id?: string
 }
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+    this.name = "ApiError"
+  }
+}
+
 export async function sendChatMessage(message: ChatMessage): Promise<ChatResponse> {
   const response = await fetch("/api/chat", {
     method: "POST",
@@ -28,7 +35,8 @@ export async function sendChatMessage(message: ChatMessage): Promise<ChatRespons
   })
 
   if (!response.ok) {
-    throw new Error("Failed to send message")
+    const data = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, data.error ?? "Falha ao enviar mensagem")
   }
 
   return response.json()
