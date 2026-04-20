@@ -35,10 +35,10 @@ export function Navbar() {
                 Benefícios
               </Link>
               <Link
-                href="#testar"
+                href="#planos"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Testar
+                Planos
               </Link>
             </div>
           </div>
@@ -46,6 +46,11 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-2">
             {session ? (
               <>
+                {session.user.isAdmin && (
+                  <Link href="/admin">
+                    <Button variant="ghost" size="sm" className="text-muted-foreground">Admin</Button>
+                  </Link>
+                )}
                 <Link href="/dashboard">
                   <Button variant="outline" size="sm">Meu painel</Button>
                 </Link>

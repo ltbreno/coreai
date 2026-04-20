@@ -4,9 +4,12 @@ import bcrypt from "bcryptjs"
 import { z } from "zod"
 
 const schema = z.object({
-  email: z.string().email("Email inválido"),
-  password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").optional(),
+  email:          z.string().email("Email inválido"),
+  password:       z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
+  name:           z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+  profession:     z.enum(["MEDICO", "NUTRICIONISTA", "FISIOTERAPEUTA", "FARMACEUTICO", "OUTRO"]),
+  credentialType: z.enum(["CRM", "CRN", "CRO", "CREFITO", "OUTRO"]),
+  credential:     z.string().min(1, "Número do conselho obrigatório"),
 })
 
 export async function POST(request: NextRequest) {
@@ -17,9 +20,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const { email, password, name } = parsed.data
+  const { email, password, name, profession, credentialType, credential } = parsed.data
+
   const existing = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
+    select: { id: true },
   })
 
   if (existing) {
@@ -28,7 +33,16 @@ export async function POST(request: NextRequest) {
 
   const hashed = await bcrypt.hash(password, 12)
   const user = await prisma.user.create({
-    data: { email: email.toLowerCase(), password: hashed, name },
+    data: {
+      email: email.toLowerCase(),
+      password: hashed,
+      name,
+      profession,
+      credentialType,
+      credential,
+      isApproved: false,
+      plan: "free",
+    },
     select: { id: true, email: true, name: true, createdAt: true },
   })
 

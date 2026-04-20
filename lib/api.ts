@@ -35,11 +35,11 @@ export async function sendChatMessage(message: ChatMessage): Promise<ChatRespons
 }
 
 export function generateSessionId(): string {
-  return `sess-${crypto.randomUUID()}`
+  return crypto.randomUUID()
 }
 
 export function generateUserId(): string {
-  return `user-${crypto.randomUUID()}`
+  return crypto.randomUUID()
 }
 
 export async function fileToBase64(file: File): Promise<string> {

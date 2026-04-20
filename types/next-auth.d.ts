@@ -6,12 +6,28 @@ declare module "next-auth" {
       id: string
       email: string
       name?: string | null
+      isAdmin: boolean
+      isSubscribed: boolean
+      isApproved: boolean
+      plan: string
     }
+  }
+
+  interface User {
+    id: string
+    isAdmin?: boolean
+    isSubscribed?: boolean
+    isApproved?: boolean
+    plan?: string
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string
+    isAdmin: boolean
+    isSubscribed: boolean
+    isApproved: boolean
+    plan: string
   }
 }

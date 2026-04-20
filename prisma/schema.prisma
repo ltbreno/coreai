@@ -8,15 +8,28 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  password            String
+  name                String?
+  isAdmin             Boolean   @default(false)
+  isSubscribed        Boolean   @default(false)
+  isApproved          Boolean   @default(false)
+  plan                String    @default("free")
+  abacateCustomerId   String?
+  profession          String?
+  credentialType      String?
+  credential          String?
+  planStartDate       DateTime?
+  planEndDate         DateTime?
+  chatRequestsUsed    Int       @default(0)
+  chatRequestsResetAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   patients     Patient[]
   chatSessions ChatSession[]
+  payments     Payment[]
 }
 
 model Patient {
@@ -57,4 +70,17 @@ model Message {
 
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId        String
+  amountCents   Int
+  status        String   @default("pending")
+  method        String   @default("PIX")
+  transparentId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

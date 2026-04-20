@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft, LayoutDashboard, ChevronDown } from "lucide-react"
+import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft, LayoutDashboard, ChevronDown, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
@@ -13,6 +13,7 @@ import {
   type ChatResponse,
 } from "@/lib/api"
 import { PatientModal, type PatientData } from "@/components/landing/PatientModal"
+import type { ReportData } from "@/types/report"
 
 interface Message {
   role: "user" | "assistant"
@@ -122,6 +123,9 @@ export default function ChatPage() {
   const [patients, setPatients] = useState<PatientOption[]>([])
   const [selectedPatientId, setSelectedPatientId] = useState<string>("")
   const [showPatientSelect, setShowPatientSelect] = useState(false)
+  const [reportData, setReportData] = useState<ReportData | null>(null)
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [reportReady, setReportReady] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sessionCreationRef = useRef<Promise<string | null> | null>(null)
@@ -228,6 +232,24 @@ export default function ChatPage() {
           followUps: response.followUpQuestions,
         },
       ])
+
+      // Pre-fetch structured report data in the background
+      setReportReady(false)
+      setReportData(null)
+      fetch("/api/generate-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, userId }),
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((rd: ReportData | null) => {
+          if (rd) {
+            if (data.idade) rd.patient = { ...rd.patient, age: data.idade }
+            setReportData(rd)
+            setReportReady(true)
+          }
+        })
+        .catch(() => {})
     } catch {
       setMessages([
         {
@@ -256,6 +278,8 @@ export default function ChatPage() {
     setPdfProcessed(false)
     setPatientData(null)
     setMessages([])
+    setReportData(null)
+    setReportReady(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -299,6 +323,51 @@ export default function ChatPage() {
     }
   }
 
+  const handleGenerateReport = async () => {
+    let rd = reportData
+
+    // If background pre-fetch hasn't finished yet, fetch now
+    if (!reportReady || !rd) {
+      setIsGeneratingReport(true)
+      try {
+        const res = await fetch("/api/generate-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, userId }),
+        })
+        if (!res.ok) throw new Error()
+        rd = await res.json() as ReportData
+        if (patientData && rd) rd.patient = { ...rd.patient, age: patientData.idade }
+        setReportData(rd)
+        setReportReady(true)
+      } catch {
+        alert("Não foi possível gerar o relatório. Tente novamente.")
+        setIsGeneratingReport(false)
+        return
+      }
+    }
+
+    if (!rd) return
+    setIsGeneratingReport(true)
+
+    try {
+      // Dynamic import keeps react-pdf out of the initial bundle
+      const { pdf } = await import("@react-pdf/renderer")
+      const { ReportPDF } = await import("@/components/pdf/ReportPDF")
+      const blob = await pdf(<ReportPDF data={rd} />).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "relatorio-core-ai.pdf"
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert("Erro ao exportar o PDF. Tente novamente.")
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
   const handleFollowUp = (question: string) => {
     setInput(question)
   }
@@ -316,6 +385,7 @@ export default function ChatPage() {
         onSubmit={handlePatientDataSubmit}
         fileName={pendingFile?.name || ""}
       />
+
 
       {/* Header */}
       <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
@@ -493,6 +563,25 @@ export default function ChatPage() {
                     </div>
                   </div>
                 )}
+
+              {pdfProcessed && !isLoading && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
+                <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleGenerateReport}
+                    disabled={isGeneratingReport}
+                  >
+                    {isGeneratingReport ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    {isGeneratingReport ? "Gerando relatório..." : "Gerar Relatório PDF"}
+                  </Button>
+                </div>
+              )}
 
               {isLoading && (
                 <div className="flex justify-start">

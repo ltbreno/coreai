@@ -18,9 +18,31 @@ interface RecentSession {
   patient: { id: string; name: string } | null
 }
 
+function ApprovalPendingScreen({ name, email }: { name?: string | null; email: string }) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="text-center max-w-md space-y-4">
+        <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+          <svg className="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h1 className="text-xl font-semibold text-foreground">Aguardando aprovação</h1>
+        <p className="text-sm text-muted-foreground">
+          Olá{name ? `, ${name}` : ""}! Sua conta ({email}) está sendo verificada. Você receberá acesso assim que o administrador aprovar suas credenciais profissionais.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
+
+  if (!session.user.isApproved && !session.user.isAdmin) {
+    return <ApprovalPendingScreen name={session.user.name} email={session.user.email} />
+  }
 
   const [patientCount, recentSessions] = await Promise.all([
     prisma.patient.count({ where: { userId: session.user.id } }),
