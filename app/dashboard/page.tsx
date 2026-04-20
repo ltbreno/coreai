@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { DashboardSignOut } from "@/components/DashboardSignOut"
+import { UserAvatar } from "@/components/UserAvatar"
 
 interface RecentSession {
   id: string
@@ -66,6 +67,7 @@ export default async function DashboardPage() {
         <div className="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
           <Link href="/" className="font-semibold text-lg">CoreAI</Link>
           <div className="flex items-center gap-3">
+            <UserAvatar name={session.user.name} avatarUrl={session.user.avatarUrl} />
             <span className="text-sm text-muted-foreground hidden sm:block">
               {session.user.name ?? session.user.email}
             </span>

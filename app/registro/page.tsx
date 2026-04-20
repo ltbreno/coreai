@@ -5,12 +5,29 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import Link from "next/link"
-import { Check, CheckCircle2, Loader2, Copy, QrCode } from "lucide-react"
+import { Check, CheckCircle2, Loader2, Copy, QrCode, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+async function resizeToBase64(file: File, maxSize = 200): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1)
+      const canvas = document.createElement("canvas")
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL("image/jpeg", 0.75))
+    }
+    img.src = url
+  })
+}
 
 const PLANS = [
   { id: "free",         name: "FREE",         price: "Grátis",   period: "",     features: ["2 Análises"],                         amountCents: 0 },
@@ -57,11 +74,24 @@ export default function RegistroPage() {
   const [copied, setCopied] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarBase64, setAvatarBase64] = useState<string | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
+  const watchedName = watch("name", "")
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const base64 = await resizeToBase64(file)
+    setAvatarPreview(base64)
+    setAvatarBase64(base64)
+  }
 
   async function onSubmitForm(data: FormData) {
     setFormLoading(true)
@@ -72,6 +102,7 @@ export default function RegistroPage() {
       body: JSON.stringify({
         name: data.name, email: data.email, password: data.password,
         profession: data.profession, credentialType: data.credentialType, credential: data.credential,
+        avatarUrl: avatarBase64 ?? undefined,
       }),
     })
     if (!res.ok) {
@@ -171,6 +202,38 @@ export default function RegistroPage() {
           {/* ── Step 1: Form ── */}
           {step === "form" && (
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
+
+              {/* Avatar picker */}
+              <div className="flex flex-col items-center gap-2 pb-2">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="relative group"
+                >
+                  <div className="h-20 w-20 rounded-full overflow-hidden ring-2 ring-border bg-muted flex items-center justify-center">
+                    {avatarPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-2xl font-semibold text-muted-foreground">
+                        {watchedName?.[0]?.toUpperCase() || <Camera className="h-7 w-7 text-muted-foreground" />}
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="h-5 w-5 text-white" />
+                  </div>
+                </button>
+                <p className="text-xs text-muted-foreground">Foto de perfil (opcional)</p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label>Nome completo</Label>
                 <Input placeholder="Seu nome" {...register("name")} />

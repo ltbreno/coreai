@@ -10,6 +10,7 @@ const schema = z.object({
   profession:     z.enum(["MEDICO", "NUTRICIONISTA", "FISIOTERAPEUTA", "FARMACEUTICO", "OUTRO"]),
   credentialType: z.enum(["CRM", "CRN", "CRO", "CREFITO", "OUTRO"]),
   credential:     z.string().min(1, "Número do conselho obrigatório"),
+  avatarUrl:      z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const { email, password, name, profession, credentialType, credential } = parsed.data
+  const { email, password, name, profession, credentialType, credential, avatarUrl } = parsed.data
 
   const existing = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       profession,
       credentialType,
       credential,
+      avatarUrl: avatarUrl ?? null,
       isApproved: false,
       plan: "free",
     },

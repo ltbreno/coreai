@@ -15,6 +15,7 @@ import {
   type ChatResponse,
 } from "@/lib/api"
 import { PatientModal, type PatientData } from "@/components/landing/PatientModal"
+import { UserAvatar } from "@/components/UserAvatar"
 import type { ReportData } from "@/types/report"
 
 interface Message {
@@ -482,6 +483,13 @@ function ChatPageInner() {
                   <span className="text-xs">Painel</span>
                 </Button>
               </Link>
+            )}
+
+            {authSession && (
+              <UserAvatar
+                name={authSession.user.name}
+                avatarUrl={authSession.user.avatarUrl}
+              />
             )}
 
             <div className="flex items-center gap-2">

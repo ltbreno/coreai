@@ -54,13 +54,14 @@ export const authOptions: NextAuthOptions = {
         // Re-fetch from DB so useSession().update() reflects subscription changes
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { isAdmin: true, isSubscribed: true, isApproved: true, plan: true },
+          select: { isAdmin: true, isSubscribed: true, isApproved: true, plan: true, avatarUrl: true },
         })
         session.user.id = token.id as string
         session.user.isAdmin = dbUser?.isAdmin ?? false
         session.user.isSubscribed = dbUser?.isSubscribed ?? false
         session.user.isApproved = dbUser?.isApproved ?? false
         session.user.plan = dbUser?.plan ?? "free"
+        session.user.avatarUrl = dbUser?.avatarUrl ?? null
       }
       return session
     },
