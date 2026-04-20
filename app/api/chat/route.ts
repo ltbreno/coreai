@@ -19,12 +19,29 @@ interface ChatRequestBody {
   remedios?: string[];
 }
 
+function generateTitle(userContent: string, assistantContent: string, isPdf: boolean): string {
+  if (isPdf) {
+    // Extract first meaningful sentence from AI response (strip markdown)
+    const clean = assistantContent
+      .replace(/^#+\s+/gm, "")
+      .replace(/\*\*/g, "")
+      .replace(/\*/g, "")
+      .trim()
+    const firstLine = clean.split(/\n/)[0]?.trim() ?? ""
+    const sentence = firstLine.split(/[.!?]/)[0]?.trim() ?? ""
+    const title = sentence.length > 8 ? sentence : "Análise de exame"
+    return title.length > 72 ? title.slice(0, 69) + "..." : title
+  }
+  return userContent.length > 72 ? userContent.slice(0, 69) + "..." : userContent
+}
+
 async function persistMessages(
   dbSessionId: string,
   userId: string,
   userContent: string,
   assistantContent: string,
   followUps: string[],
+  isPdf: boolean,
 ) {
   const chatSession = await prisma.chatSession.findFirst({
     where: { id: dbSessionId, userId },
@@ -33,26 +50,15 @@ async function persistMessages(
 
   await prisma.$transaction([
     prisma.message.create({
-      data: {
-        sessionId: dbSessionId,
-        role: "user",
-        content: userContent,
-        followUps: [],
-      },
+      data: { sessionId: dbSessionId, role: "user", content: userContent, followUps: [] },
     }),
     prisma.message.create({
-      data: {
-        sessionId: dbSessionId,
-        role: "assistant",
-        content: assistantContent,
-        followUps,
-      },
+      data: { sessionId: dbSessionId, role: "assistant", content: assistantContent, followUps },
     }),
   ]);
 
   if (!chatSession.title) {
-    const title =
-      userContent.slice(0, 60) + (userContent.length > 60 ? "..." : "");
+    const title = generateTitle(userContent, assistantContent, isPdf)
     await prisma.chatSession.update({
       where: { id: dbSessionId },
       data: { title, updatedAt: new Date() },
@@ -80,7 +86,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
   }
 
-  if (!dbUser.isApproved) {
+  if (!dbUser.isApproved && !authSession.user.isAdmin) {
     return NextResponse.json(
       { error: "Sua conta está aguardando aprovação do administrador." },
       { status: 403 }
@@ -176,6 +182,7 @@ export async function POST(request: NextRequest) {
         userContent,
         data.response ?? "",
         data.followUpQuestions ?? [],
+        !!pdf_base64,
       ).catch(() => {});
     }
 

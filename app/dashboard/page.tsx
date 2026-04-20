@@ -154,8 +154,9 @@ export default async function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 {(recentSessions as RecentSession[]).map((s) => (
-                  <div
+                  <Link
                     key={s.id}
+                    href={`/chat?session=${s.id}`}
                     className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -175,7 +176,7 @@ export default async function DashboardPage() {
                       <Calendar className="h-3 w-3" />
                       {format(new Date(s.updatedAt), "dd/MM/yyyy", { locale: ptBR })}
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { FileText, Send, Upload, X, Loader2, Paperclip, ArrowLeft, LayoutDashboard, ChevronDown, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -107,8 +108,9 @@ function formatResponse(text: string): React.ReactNode {
   return <div className="space-y-2">{elements}</div>
 }
 
-export default function ChatPage() {
+function ChatPageInner() {
   const { data: authSession } = useSession()
+  const searchParams = useSearchParams()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -129,6 +131,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sessionCreationRef = useRef<Promise<string | null> | null>(null)
+  const sessionParamLoadedRef = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -146,6 +149,31 @@ export default function ChatPage() {
       .then((data) => { if (Array.isArray(data)) setPatients(data) })
       .catch(() => {})
   }, [authSession])
+
+  // Load existing session from URL ?session=ID
+  useEffect(() => {
+    const sessionParam = searchParams.get("session")
+    if (!sessionParam || !authSession || sessionParamLoadedRef.current) return
+    sessionParamLoadedRef.current = true
+
+    fetch(`/api/sessions/${sessionParam}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { id: string; patient?: { id: string } | null; messages: { role: string; content: string; followUps?: unknown }[] } | null) => {
+        if (!data) return
+        setDbSessionId(data.id)
+        if (data.patient?.id) setSelectedPatientId(data.patient.id)
+        const msgs: Message[] = data.messages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          followUps: Array.isArray(m.followUps) ? (m.followUps as string[]) : undefined,
+        }))
+        setMessages(msgs)
+        if (msgs.some((m) => m.role === "user" && m.content.startsWith("[PDF enviado"))) {
+          setPdfProcessed(true)
+        }
+      })
+      .catch(() => {})
+  }, [authSession, searchParams])
 
   // Create DB session lazily on first message
   const getOrCreateDbSession = async (): Promise<string | null> => {
@@ -647,5 +675,13 @@ export default function ChatPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense>
+      <ChatPageInner />
+    </Suspense>
   )
 }
