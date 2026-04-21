@@ -23,6 +23,7 @@ interface UserRow {
   isAdmin: boolean
   isSubscribed: boolean
   isApproved: boolean
+  isStudent: boolean
   plan: string
   planStartDate: string | null
   planEndDate: string | null
@@ -92,19 +93,21 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
 
-  const [search,   setSearch]   = useState("")
-  const [planF,    setPlanF]    = useState("all")
-  const [approvalF,setApprovalF]= useState("all")
-  const [paymentF, setPaymentF] = useState("all")
+  const [search,    setSearch]    = useState("")
+  const [planF,     setPlanF]     = useState("all")
+  const [approvalF, setApprovalF] = useState("all")
+  const [paymentF,  setPaymentF]  = useState("all")
+  const [userTypeF, setUserTypeF] = useState("all")
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const fetchUsers = useCallback((s: string, p: string, a: string, pay: string) => {
+  const fetchUsers = useCallback((s: string, p: string, a: string, pay: string, ut: string) => {
     const params = new URLSearchParams()
-    if (s)       params.set("search",   s)
-    if (p !== "all")   params.set("plan",     p)
-    if (a !== "all")   params.set("approval", a)
-    if (pay !== "all") params.set("payment",  pay)
+    if (s)           params.set("search",   s)
+    if (p !== "all") params.set("plan",     p)
+    if (a !== "all") params.set("approval", a)
+    if (pay !== "all") params.set("payment", pay)
+    if (ut !== "all") params.set("userType", ut)
     fetch(`/api/admin/users?${params}`)
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d)) setUsers(d) })
@@ -116,7 +119,7 @@ export default function AdminPage() {
     if (status === "authenticated" && !session.user.isAdmin) { router.replace("/dashboard"); return }
     if (status === "authenticated" && session.user.isAdmin) {
       fetch("/api/admin/stats").then((r) => r.json()).then(setStats)
-      fetchUsers(search, planF, approvalF, paymentF)
+      fetchUsers(search, planF, approvalF, paymentF, userTypeF)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session, router])
@@ -124,17 +127,19 @@ export default function AdminPage() {
   function handleSearchChange(value: string) {
     setSearch(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchUsers(value, planF, approvalF, paymentF), 300)
+    debounceRef.current = setTimeout(() => fetchUsers(value, planF, approvalF, paymentF, userTypeF), 300)
   }
 
-  function handleFilterChange(key: "plan" | "approval" | "payment", value: string) {
+  function handleFilterChange(key: "plan" | "approval" | "payment" | "userType", value: string) {
     const newPlan     = key === "plan"     ? value : planF
     const newApproval = key === "approval" ? value : approvalF
     const newPayment  = key === "payment"  ? value : paymentF
+    const newUserType = key === "userType" ? value : userTypeF
     if (key === "plan")     setPlanF(value)
     if (key === "approval") setApprovalF(value)
     if (key === "payment")  setPaymentF(value)
-    fetchUsers(search, newPlan, newApproval, newPayment)
+    if (key === "userType") setUserTypeF(value)
+    fetchUsers(search, newPlan, newApproval, newPayment, newUserType)
   }
 
   async function handlePatch(userId: string, field: string, payload: Record<string, unknown>) {
@@ -220,13 +225,14 @@ export default function AdminPage() {
             />
           </div>
           {([
+            { key: "userType", label: "Tipo",      options: [["all","Todos os tipos"],["professional","Profissional"],["student","Estudante"]] },
             { key: "plan",     label: "Plano",     options: [["all","Todos os planos"],["free","FREE"],["essencial","ESSENCIAL"],["profissional","PROFISSIONAL"],["premium","PREMIUM"]] },
             { key: "approval", label: "Aprovação", options: [["all","Todos"],["pending","Pendente"],["approved","Aprovado"]] },
             { key: "payment",  label: "Pagamento", options: [["all","Todos"],["pending","Pendente"],["completed","Pago"]] },
           ] as const).map(({ key, options }) => (
             <select
               key={key}
-              value={key === "plan" ? planF : key === "approval" ? approvalF : paymentF}
+              value={key === "plan" ? planF : key === "approval" ? approvalF : key === "payment" ? paymentF : userTypeF}
               onChange={(e) => handleFilterChange(key, e.target.value)}
               className="px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -259,9 +265,17 @@ export default function AdminPage() {
                       <div className="text-xs text-muted-foreground">{user.email}</div>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
-                      <div className="text-foreground">{PROFESSION_LABELS[user.profession ?? ""] ?? user.profession ?? "—"}</div>
-                      {user.credential && (
-                        <div className="text-xs text-muted-foreground">{user.credentialType} {user.credential}</div>
+                      {user.isStudent ? (
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                          Estudante
+                        </span>
+                      ) : (
+                        <>
+                          <div className="text-foreground">{PROFESSION_LABELS[user.profession ?? ""] ?? user.profession ?? "—"}</div>
+                          {user.credential && (
+                            <div className="text-xs text-muted-foreground">{user.credentialType} {user.credential}</div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">

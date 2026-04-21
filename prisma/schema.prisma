@@ -16,6 +16,7 @@ model User {
   isAdmin             Boolean   @default(false)
   isSubscribed        Boolean   @default(false)
   isApproved          Boolean   @default(false)
+  isStudent           Boolean   @default(false)
   plan                String    @default("free")
   abacateCustomerId   String?
   profession          String?

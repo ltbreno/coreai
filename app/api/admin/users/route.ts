@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const plan     = searchParams.get("plan") ?? "all"
   const approval = searchParams.get("approval") ?? "all"
   const payment  = searchParams.get("payment") ?? "all"
+  const userType = searchParams.get("userType") ?? "all"
 
   const where: Prisma.UserWhereInput = {
     isAdmin: false,
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
     ...(plan !== "all" ? { plan } : {}),
     ...(approval === "pending"  ? { isApproved: false } : {}),
     ...(approval === "approved" ? { isApproved: true }  : {}),
+    ...(userType === "student"      ? { isStudent: true }  : {}),
+    ...(userType === "professional" ? { isStudent: false } : {}),
   }
 
   const users = await prisma.user.findMany({
@@ -41,6 +44,7 @@ export async function GET(request: NextRequest) {
       plan: true,
       planStartDate: true,
       planEndDate: true,
+      isStudent: true,
       profession: true,
       credentialType: true,
       credential: true,

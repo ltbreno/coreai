@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import Link from "next/link"
-import { Check, CheckCircle2, Loader2, Copy, QrCode, Camera } from "lucide-react"
+import { Check, CheckCircle2, Loader2, Copy, QrCode, Camera, GraduationCap, Stethoscope } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,22 +36,33 @@ const PLANS = [
   { id: "premium",      name: "PREMIUM",       price: "R$ 89,90", period: "/mês", features: ["60 análises", "Chatbot Interativo"],  amountCents: 8990 },
 ]
 
-const schema = z.object({
-  name:           z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
-  email:          z.string().email("Email inválido"),
-  password:       z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
-  confirmPassword:z.string(),
-  profession:     z.enum(["MEDICO", "NUTRICIONISTA", "FISIOTERAPEUTA", "FARMACEUTICO", "OUTRO"], {
-    required_error: "Selecione sua profissão",
-  }),
-  credentialType: z.enum(["CRM", "CRN", "CRO", "CREFITO", "OUTRO"], {
-    required_error: "Selecione o tipo de conselho",
-  }),
-  credential:     z.string().min(1, "Número do conselho obrigatório"),
-}).refine((d) => d.password === d.confirmPassword, {
-  message: "As senhas não coincidem",
-  path: ["confirmPassword"],
-})
+const schema = z
+  .object({
+    name:            z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+    email:           z.string().email("Email inválido"),
+    password:        z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
+    confirmPassword: z.string(),
+    userType:        z.enum(["professional", "student"]),
+    profession:      z.enum(["MEDICO", "NUTRICIONISTA", "FISIOTERAPEUTA", "FARMACEUTICO", "OUTRO"]).optional(),
+    credentialType:  z.enum(["CRM", "CRN", "CRO", "CREFITO", "OUTRO"]).optional(),
+    credential:      z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "As senhas não coincidem", path: ["confirmPassword"] })
+    }
+    if (data.userType === "professional") {
+      if (!data.profession) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione sua profissão", path: ["profession"] })
+      }
+      if (!data.credentialType) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione o tipo de conselho", path: ["credentialType"] })
+      }
+      if (!data.credential?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Número do conselho obrigatório", path: ["credential"] })
+      }
+    }
+  })
 
 type FormData = z.infer<typeof schema>
 type Step = "form" | "plan" | "payment" | "pending"
@@ -66,6 +77,7 @@ export default function RegistroPage() {
   const [step, setStep] = useState<Step>("form")
   const [userId, setUserId] = useState("")
   const [selectedPlan, setSelectedPlan] = useState("")
+  const [isStudentReg, setIsStudentReg] = useState(false)
   const [formError, setFormError] = useState("")
   const [formLoading, setFormLoading] = useState(false)
   const [qrData, setQrData] = useState<QRData | null>(null)
@@ -78,12 +90,19 @@ export default function RegistroPage() {
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, formState: { errors }, clearErrors } = useForm<FormData>({
     resolver: zodResolver(schema),
+    defaultValues: { userType: "professional" },
   })
   const watchedName = watch("name", "")
+  const userType = watch("userType")
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  function switchUserType(type: "professional" | "student") {
+    setValue("userType", type)
+    clearErrors(["profession", "credentialType", "credential"])
+  }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -96,13 +115,19 @@ export default function RegistroPage() {
   async function onSubmitForm(data: FormData) {
     setFormLoading(true)
     setFormError("")
+    const isStudent = data.userType === "student"
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: data.name, email: data.email, password: data.password,
-        profession: data.profession, credentialType: data.credentialType, credential: data.credential,
-        avatarUrl: avatarBase64 ?? undefined,
+        name:           data.name,
+        email:          data.email,
+        password:       data.password,
+        isStudent,
+        profession:     isStudent ? undefined : data.profession,
+        credentialType: isStudent ? undefined : data.credentialType,
+        credential:     isStudent ? undefined : data.credential,
+        avatarUrl:      avatarBase64 ?? undefined,
       }),
     })
     if (!res.ok) {
@@ -113,6 +138,7 @@ export default function RegistroPage() {
     }
     const json = await res.json()
     setUserId(json.id)
+    setIsStudentReg(isStudent)
     setFormLoading(false)
     setStep("plan")
   }
@@ -174,7 +200,11 @@ export default function RegistroPage() {
           {step === "form" && (
             <>
               <CardTitle className="text-xl">Criar sua conta</CardTitle>
-              <CardDescription>Preencha seus dados e credencial profissional</CardDescription>
+              <CardDescription>
+                {userType === "student"
+                  ? "Preencha seus dados para criar sua conta de estudante"
+                  : "Preencha seus dados e credencial profissional"}
+              </CardDescription>
             </>
           )}
           {step === "plan" && (
@@ -202,6 +232,34 @@ export default function RegistroPage() {
           {/* ── Step 1: Form ── */}
           {step === "form" && (
             <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4">
+
+              {/* User type toggle */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => switchUserType("professional")}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                    userType === "professional"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Stethoscope className="h-4 w-4" />
+                  Profissional
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchUserType("student")}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                    userType === "student"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <GraduationCap className="h-4 w-4" />
+                  Estudante
+                </button>
+              </div>
 
               {/* Avatar picker */}
               <div className="flex flex-col items-center gap-2 pb-2">
@@ -256,48 +314,53 @@ export default function RegistroPage() {
                   {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
                 </div>
               </div>
-              <div className="pt-1 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-3 mt-2">Credencial profissional</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Profissão</Label>
-                    <Select onValueChange={(v) => setValue("profession", v as FormData["profession"])}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MEDICO">Médico(a)</SelectItem>
-                        <SelectItem value="NUTRICIONISTA">Nutricionista</SelectItem>
-                        <SelectItem value="FISIOTERAPEUTA">Fisioterapeuta</SelectItem>
-                        <SelectItem value="FARMACEUTICO">Farmacêutico(a)</SelectItem>
-                        <SelectItem value="OUTRO">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {errors.profession && <p className="text-sm text-destructive">{errors.profession.message}</p>}
+
+              {/* Professional credential section — hidden for students */}
+              {userType === "professional" && (
+                <div className="pt-1 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-3 mt-2">Credencial profissional</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Profissão</Label>
+                      <Select onValueChange={(v) => setValue("profession", v as FormData["profession"])}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="MEDICO">Médico(a)</SelectItem>
+                          <SelectItem value="NUTRICIONISTA">Nutricionista</SelectItem>
+                          <SelectItem value="FISIOTERAPEUTA">Fisioterapeuta</SelectItem>
+                          <SelectItem value="FARMACEUTICO">Farmacêutico(a)</SelectItem>
+                          <SelectItem value="OUTRO">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {errors.profession && <p className="text-sm text-destructive">{errors.profession.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Conselho</Label>
+                      <Select onValueChange={(v) => setValue("credentialType", v as FormData["credentialType"])}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CRM">CRM</SelectItem>
+                          <SelectItem value="CRN">CRN</SelectItem>
+                          <SelectItem value="CRO">CRO</SelectItem>
+                          <SelectItem value="CREFITO">CREFITO</SelectItem>
+                          <SelectItem value="OUTRO">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {errors.credentialType && <p className="text-sm text-destructive">{errors.credentialType.message}</p>}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Conselho</Label>
-                    <Select onValueChange={(v) => setValue("credentialType", v as FormData["credentialType"])}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CRM">CRM</SelectItem>
-                        <SelectItem value="CRN">CRN</SelectItem>
-                        <SelectItem value="CRO">CRO</SelectItem>
-                        <SelectItem value="CREFITO">CREFITO</SelectItem>
-                        <SelectItem value="OUTRO">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {errors.credentialType && <p className="text-sm text-destructive">{errors.credentialType.message}</p>}
+                  <div className="space-y-2 mt-3">
+                    <Label>Número do conselho</Label>
+                    <Input placeholder="ex: 123456/SP" {...register("credential")} />
+                    {errors.credential && <p className="text-sm text-destructive">{errors.credential.message}</p>}
                   </div>
                 </div>
-                <div className="space-y-2 mt-3">
-                  <Label>Número do conselho</Label>
-                  <Input placeholder="ex: 123456/SP" {...register("credential")} />
-                  {errors.credential && <p className="text-sm text-destructive">{errors.credential.message}</p>}
-                </div>
-              </div>
+              )}
+
               {formError && <p className="text-sm text-destructive text-center">{formError}</p>}
               <Button type="submit" className="w-full" disabled={formLoading}>
                 {formLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continuar"}
@@ -392,7 +455,9 @@ export default function RegistroPage() {
               <div className="text-center space-y-2">
                 <p className="font-semibold text-foreground">Conta criada com sucesso!</p>
                 <p className="text-sm text-muted-foreground">
-                  Sua credencial profissional está sendo verificada. Você receberá acesso assim que o administrador aprovar sua conta.
+                  {isStudentReg
+                    ? "Seu cadastro está sendo verificado. Você receberá acesso assim que o administrador aprovar sua conta."
+                    : "Sua credencial profissional está sendo verificada. Você receberá acesso assim que o administrador aprovar sua conta."}
                 </p>
               </div>
               <Link href="/login" className="w-full">
