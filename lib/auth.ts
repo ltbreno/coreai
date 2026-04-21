@@ -46,22 +46,35 @@ export const authOptions: NextAuthOptions = {
         token.isSubscribed = (user as { isSubscribed?: boolean }).isSubscribed ?? false
         token.isApproved = (user as { isApproved?: boolean }).isApproved ?? false
         token.plan = (user as { plan?: string }).plan ?? "free"
+        token.avatarUrl = (user as { avatarUrl?: string | null }).avatarUrl ?? null
       }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
-        // Re-fetch from DB so useSession().update() reflects subscription changes
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: { isAdmin: true, isSubscribed: true, isApproved: true, plan: true, avatarUrl: true },
-        })
         session.user.id = token.id as string
-        session.user.isAdmin = dbUser?.isAdmin ?? false
-        session.user.isSubscribed = dbUser?.isSubscribed ?? false
-        session.user.isApproved = dbUser?.isApproved ?? false
-        session.user.plan = dbUser?.plan ?? "free"
-        session.user.avatarUrl = dbUser?.avatarUrl ?? null
+        session.user.isAdmin = (token.isAdmin as boolean) ?? false
+        session.user.isSubscribed = (token.isSubscribed as boolean) ?? false
+        session.user.isApproved = (token.isApproved as boolean) ?? false
+        session.user.plan = (token.plan as string) ?? "free"
+        session.user.avatarUrl = null
+
+        // Re-fetch from DB to reflect latest subscription/approval changes
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { isAdmin: true, isSubscribed: true, isApproved: true, plan: true, avatarUrl: true },
+          })
+          if (dbUser) {
+            session.user.isAdmin = dbUser.isAdmin
+            session.user.isSubscribed = dbUser.isSubscribed
+            session.user.isApproved = dbUser.isApproved
+            session.user.plan = dbUser.plan ?? "free"
+            session.user.avatarUrl = dbUser.avatarUrl ?? null
+          }
+        } catch {
+          // DB unavailable — keep values from JWT token
+        }
       }
       return session
     },
