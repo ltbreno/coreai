@@ -1,10 +1,11 @@
 "use client"
 
+import type { FormEvent } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Shield, Loader2, Search, Users, Clock, CreditCard, Activity } from "lucide-react"
+import { ArrowLeft, Shield, Loader2, Search, Users, Clock, CreditCard, Activity, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PLAN_LIMITS } from "@/lib/plans"
 
@@ -41,6 +42,16 @@ interface Stats {
   totalUsers: number
   subscribedUsers: number
   totalRequests: number
+}
+
+interface CouponRow {
+  id: string
+  code: string
+  plan: string
+  durationDays: number
+  isActive: boolean
+  createdAt: string
+  _count: { users: number }
 }
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -92,6 +103,12 @@ export default function AdminPage() {
   const [stats, setStats]   = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [coupons, setCoupons] = useState<CouponRow[]>([])
+  const [couponCode, setCouponCode] = useState("")
+  const [couponPlan, setCouponPlan] = useState("premium")
+  const [couponDurationDays, setCouponDurationDays] = useState("30")
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponError, setCouponError] = useState("")
 
   const [search,    setSearch]    = useState("")
   const [planF,     setPlanF]     = useState("all")
@@ -114,12 +131,19 @@ export default function AdminPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const fetchCoupons = useCallback(() => {
+    fetch("/api/admin/coupons")
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setCoupons(d) })
+  }, [])
+
   useEffect(() => {
     if (status === "unauthenticated") { router.replace("/login"); return }
     if (status === "authenticated" && !session.user.isAdmin) { router.replace("/dashboard"); return }
     if (status === "authenticated" && session.user.isAdmin) {
       fetch("/api/admin/stats").then((r) => r.json()).then(setStats)
       fetchUsers(search, planF, approvalF, paymentF, userTypeF)
+      fetchCoupons()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session, router])
@@ -157,6 +181,56 @@ export default function AdminPage() {
           setStats((s) => s ? { ...s, pendingApprovals: Math.max(0, s.pendingApprovals - 1) } : s)
         }
       }
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  async function handleCreateCoupon(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setCouponLoading(true)
+    setCouponError("")
+
+    try {
+      const res = await fetch("/api/admin/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: couponCode,
+          plan: couponPlan,
+          durationDays: Number(couponDurationDays),
+        }),
+      })
+
+      const json = await res.json()
+
+      if (!res.ok) {
+        setCouponError(json.error ?? "Erro ao criar cupom")
+        return
+      }
+
+      setCoupons((prev) => [json, ...prev])
+      setCouponCode("")
+      setCouponPlan("premium")
+      setCouponDurationDays("30")
+    } finally {
+      setCouponLoading(false)
+    }
+  }
+
+  async function handleCouponToggle(couponId: string, isActive: boolean) {
+    setUpdating(`coupon-${couponId}`)
+    try {
+      const res = await fetch(`/api/admin/coupons/${couponId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      })
+
+      if (!res.ok) return
+
+      const updated = await res.json()
+      setCoupons((prev) => prev.map((coupon) => coupon.id === couponId ? updated : coupon))
     } finally {
       setUpdating(null)
     }
@@ -239,6 +313,110 @@ export default function AdminPage() {
               {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Ticket className="h-4 w-4 text-foreground" />
+              <h2 className="font-semibold text-foreground">Criar cupom</h2>
+            </div>
+
+            <form onSubmit={handleCreateCoupon} className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">CÃ³digo</label>
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="EX: ACESSO30"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm text-muted-foreground">Plano liberado</label>
+                  <select
+                    value={couponPlan}
+                    onChange={(e) => setCouponPlan(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="essencial">ESSENCIAL</option>
+                    <option value="profissional">PROFISSIONAL</option>
+                    <option value="premium">PREMIUM</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm text-muted-foreground">DuraÃ§Ã£o (dias)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={couponDurationDays}
+                    onChange={(e) => setCouponDurationDays(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+
+              {couponError && <p className="text-sm text-destructive">{couponError}</p>}
+
+              <Button type="submit" disabled={couponLoading || !couponCode.trim()}>
+                {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar cupom"}
+              </Button>
+            </form>
+          </div>
+
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="px-5 py-4 border-b border-border bg-card">
+              <div className="flex items-center gap-2">
+                <Ticket className="h-4 w-4 text-foreground" />
+                <h2 className="font-semibold text-foreground">Cupons</h2>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">CÃ³digo</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Plano</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Dias</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Usos</th>
+                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ativo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coupons.map((coupon) => (
+                    <tr key={coupon.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 font-medium text-foreground">{coupon.code}</td>
+                      <td className="px-4 py-3 text-foreground capitalize">{coupon.plan}</td>
+                      <td className="px-4 py-3 text-center text-foreground">{coupon.durationDays}</td>
+                      <td className="px-4 py-3 text-center text-foreground">{coupon._count.users}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-center">
+                          <Toggle
+                            checked={coupon.isActive}
+                            onChange={(value) => handleCouponToggle(coupon.id, value)}
+                            disabled={updating === `coupon-${coupon.id}`}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {coupons.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                        Nenhum cupom cadastrado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         {/* Table */}

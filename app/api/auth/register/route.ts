@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { normalizeCouponCode, getCouponPlanDates } from "@/lib/coupons"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
@@ -13,6 +14,7 @@ const schema = z
     profession:     z.enum(["MEDICO", "NUTRICIONISTA", "FISIOTERAPEUTA", "FARMACEUTICO", "OUTRO"]).optional(),
     credentialType: z.enum(["CRM", "CRN", "CRO", "CREFITO", "OUTRO"]).optional(),
     credential:     z.string().optional(),
+    couponCode:     z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.isStudent) {
@@ -36,7 +38,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const { email, password, name, isStudent, profession, credentialType, credential, avatarUrl } = parsed.data
+  const { email, password, name, isStudent, profession, credentialType, credential, avatarUrl, couponCode } = parsed.data
+
+  let coupon = null as null | { id: string; code: string; plan: string; durationDays: number }
+  const normalizedCouponCode = couponCode?.trim() ? normalizeCouponCode(couponCode) : null
+
+  if (normalizedCouponCode) {
+    coupon = await prisma.coupon.findFirst({
+      where: { code: normalizedCouponCode, isActive: true },
+      select: { id: true, code: true, plan: true, durationDays: true },
+    })
+
+    if (!coupon) {
+      return NextResponse.json({ error: "Cupom invÃ¡lido ou inativo" }, { status: 400 })
+    }
+  }
 
   const existing = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
@@ -48,6 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   const hashed = await bcrypt.hash(password, 12)
+  const couponPlanDates = coupon ? getCouponPlanDates(coupon.durationDays) : null
   const user = await prisma.user.create({
     data: {
       email:          email.toLowerCase(),
@@ -59,10 +76,19 @@ export async function POST(request: NextRequest) {
       credential:     isStudent ? null : (credential ?? null),
       avatarUrl:      avatarUrl ?? null,
       isApproved:     false,
-      plan:           "free",
+      isSubscribed:   Boolean(coupon),
+      plan:           coupon?.plan ?? "free",
+      planStartDate:  couponPlanDates?.now ?? null,
+      planEndDate:    couponPlanDates?.planEndDate ?? null,
+      chatRequestsResetAt: couponPlanDates?.planEndDate ?? null,
+      coupon:         coupon ? { connect: { id: coupon.id } } : undefined,
     },
     select: { id: true, email: true, name: true, createdAt: true },
   })
 
-  return NextResponse.json(user, { status: 201 })
+  return NextResponse.json({
+    ...user,
+    couponApplied: Boolean(coupon),
+    couponPlan: coupon?.plan ?? null,
+  }, { status: 201 })
 }

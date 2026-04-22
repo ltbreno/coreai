@@ -46,6 +46,7 @@ const schema = z
     profession:      z.enum(["MEDICO", "NUTRICIONISTA", "FISIOTERAPEUTA", "FARMACEUTICO", "OUTRO"]).optional(),
     credentialType:  z.enum(["CRM", "CRN", "CRO", "CREFITO", "OUTRO"]).optional(),
     credential:      z.string().optional(),
+    couponCode:      z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.confirmPassword) {
@@ -80,6 +81,8 @@ export default function RegistroPage() {
   const [isStudentReg, setIsStudentReg] = useState(false)
   const [formError, setFormError] = useState("")
   const [formLoading, setFormLoading] = useState(false)
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [couponPlan, setCouponPlan] = useState<string | null>(null)
   const [qrData, setQrData] = useState<QRData | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
   const [qrError, setQrError] = useState("")
@@ -127,6 +130,7 @@ export default function RegistroPage() {
         profession:     isStudent ? undefined : data.profession,
         credentialType: isStudent ? undefined : data.credentialType,
         credential:     isStudent ? undefined : data.credential,
+        couponCode:     data.couponCode?.trim() || undefined,
         avatarUrl:      avatarBase64 ?? undefined,
       }),
     })
@@ -139,8 +143,10 @@ export default function RegistroPage() {
     const json = await res.json()
     setUserId(json.id)
     setIsStudentReg(isStudent)
+    setCouponApplied(Boolean(json.couponApplied))
+    setCouponPlan(json.couponPlan ?? null)
     setFormLoading(false)
-    setStep("plan")
+    setStep(json.couponApplied ? "pending" : "plan")
   }
 
   async function selectPlan(planId: string) {
@@ -302,6 +308,14 @@ export default function RegistroPage() {
                 <Input type="email" placeholder="seu@email.com" {...register("email")} />
                 {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
               </div>
+              <div className="space-y-2">
+                <Label>Cupom de acesso</Label>
+                <Input placeholder="Opcional" {...register("couponCode")} />
+                <p className="text-xs text-muted-foreground">
+                  Se vocÃª recebeu um cupom, ele libera acesso sem pagamento.
+                </p>
+                {errors.couponCode && <p className="text-sm text-destructive">{errors.couponCode.message}</p>}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Senha</Label>
@@ -454,6 +468,11 @@ export default function RegistroPage() {
               </div>
               <div className="text-center space-y-2">
                 <p className="font-semibold text-foreground">Conta criada com sucesso!</p>
+                {couponApplied && (
+                  <p className="text-sm text-green-600">
+                    Cupom aplicado com sucesso{couponPlan ? ` no plano ${couponPlan.toUpperCase()}` : ""}.
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground">
                   {isStudentReg
                     ? "Seu cadastro está sendo verificado. Você receberá acesso assim que o administrador aprovar sua conta."

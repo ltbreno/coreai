@@ -3,6 +3,8 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 
+const authSecret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -83,5 +85,5 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
     error: "/login",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
 }
